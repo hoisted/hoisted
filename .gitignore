@@ -25,6 +25,15 @@ tmp*
 dist
 test-output
 
+# sbt
+target
+lib_managed
+src_managed
+project/boot
+
+# db
+lift_proto*
+
 # other scm
 .svn
 .CVS
@@ -34,8 +43,12 @@ test-output
 #  syntax: regexp
 #  ^\.pc/
 
-
 # IntelliJ
 *.iml
 *.ipr
 *.iws
+.idea
+
+# Pax Runner (for easy OSGi launching)
+runner
+
