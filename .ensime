@@ -1,0 +1,13 @@
+;; This config was generated using ensime-config-gen. Feel free to customize its contents manually. 
+
+(
+
+:project-name "Lift Pro CMS"
+
+:server-root "/home/dpp/bin/ensime"
+
+:project-package "com.liftweb"
+
+:use-sbt t
+
+)
