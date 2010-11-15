@@ -25,7 +25,10 @@ object CMSStore {
 
   def _defaultHost = "liftweb.net"
   
-  def baseDir = new File(Props.get("cms.root").open_!)
+  def baseDir = {
+    val ret = new File(Props.get("cms.root").open_!)
+    ret
+  }
 
   /**
    * What's the name of the default host (the Lift CMS system)
@@ -95,7 +98,8 @@ object CMSStore {
 
 
   private def parseFile(f: File): Box[(File, Key, FileRecord)] = {
-    def parseKeyRecord(in: NodeSeq): Box[(Key, FileRecord)] = {
+    def parseKeyRecord(in2: NodeSeq): Box[(Key, FileRecord)] = {
+      val in: NodeSeq = in2(0)
       def parseContent(): Box[Content] = (in \ "@type").headOption.
       map(_.text.toLowerCase) match {
         case Some("css") => {
@@ -164,7 +168,9 @@ object CMSStore {
       fis <- tryo(new FileInputStream(f))
       xml <- PCDataXmlParser(fis)
       (key, record) <- parseKeyRecord(xml)
-    } yield (f, key, record)
+    } yield {
+      (f, key, record)
+    }
   }
 
   def findByTag(tag: String, value: Box[String]): Stream[FileRecord] = {

@@ -59,12 +59,23 @@ object CMS extends LiftRules.DispatchPF {
   }
 
   def chooseNode(in: NodeSeq): NodeSeq = {
-    val lst = in.toList.collect {
+    val num = S.attr("cnt").flatMap(Helpers.asInt) openOr 1
+
+    val lst = in.toArray.collect {
       case e: Elem => e
     }
     val cnt = lst.size
-    val ri = randomInt(cnt)
-    lst.drop(ri).head
+
+    for {
+      i <- 0 until cnt
+    } {
+      val ri = randomInt(cnt)
+      val n = lst(ri)
+      lst(ri) = lst(i)
+      lst(i) = n
+    }
+    
+    lst.take(num).toList
   }
 
   def testAttr(in: NodeSeq): NodeSeq = {
@@ -115,7 +126,7 @@ object CMS extends LiftRules.DispatchPF {
       fr =>
         bind("menu", in, "item" -> 
              (fr.findTag("menu").flatMap(_.value) openOr fr.path.mkString("/", "/", "")),
-             FuncAttrOptionBindParam("class", value => 
+             FuncAttrOptionBindParam("class", (value: NodeSeq) => 
                if (currentRecord.is == Full(fr.content)) Some(value) else None, "class"),
            AttrBindParam("href", Text(fr.redirectTo openOr fr.path.mkString("/", "/", "")), "href"))
     }
