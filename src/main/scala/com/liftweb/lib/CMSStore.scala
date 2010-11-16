@@ -106,14 +106,16 @@ object CMSStore {
           (in \ "content").headOption.map(n => CSSContent(n.text))
         }
 
-        case _ => 
-          val ret = (in \ "content").find {
-            case e: Elem => true
-            case _ => false
-          }.collect {
-            case e: Elem => e
-          }.headOption.map(HtmlContent(_, true))
-        ret
+        case _ => {
+          val ret = 
+            (for {
+              content <- (in \ "content").toStream
+              kid <- content.child
+            } yield kid).collect {
+              case e: Elem => e
+            }.headOption.map(HtmlContent(_, true))
+          ret
+        }
       }
 
       for {
