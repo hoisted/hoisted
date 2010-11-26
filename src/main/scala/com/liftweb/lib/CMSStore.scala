@@ -106,6 +106,10 @@ object CMSStore {
           (in \ "content").headOption.map(n => CSSContent(n.text))
         }
 
+        case Some("js") => {
+          (in \ "content").headOption.map(n => JavaScriptContent(n.text))
+        }
+
         case _ => {
           val ret = 
             (for {
