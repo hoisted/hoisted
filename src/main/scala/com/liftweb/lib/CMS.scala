@@ -178,7 +178,7 @@ object CMS extends LiftRules.DispatchPF {
       })
 
     // run it on another thread
-    ActorPing.schedule(f, 0 seconds)
+    Schedule(f, 0 seconds)
     
     // and get the response
     future.get(2000)

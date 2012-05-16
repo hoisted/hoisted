@@ -89,12 +89,12 @@ object CMSStore {
         changeDates = cd
     }
 
-    ActorPing.schedule(() => scanFiles(), 
+    Schedule(() => scanFiles(),
                        if (Props.productionMode) 60 seconds else
                          1 seconds)
   }
 
-  ActorPing.schedule(() => scanFiles(), 0 seconds)
+  Schedule(() => scanFiles(), 0 seconds)
 
 
   private def parseFile(f: File): Box[(File, Key, FileRecord)] = {
