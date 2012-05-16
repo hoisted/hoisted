@@ -197,7 +197,7 @@ object CMSStore {
   /**
    * What's the default locale
    */
-  lazy val defaultLocale = Locale.getDefault
+  lazy val defaultLocale = Locale.US
 
   def localeFor(in: String): Box[Locale] = 
     Locale.getAvailableLocales().filter(_.toString == in).headOption
