@@ -8,6 +8,8 @@ syntax: glob
 *.old
 .DS_Store
 
+.idea
+
 # logs
 derby.log
 
