@@ -1,4 +1,4 @@
-package code {
+/*package code {
 package snippet {
 
 import org.specs._
@@ -12,6 +12,7 @@ import org.specs.matcher._
 import org.specs.specification._
 import Helpers._
 import lib._
+
 
 
 class HelloWorldTestSpecsAsTest extends JUnit3(HelloWorldTestSpecs)
@@ -44,3 +45,4 @@ object HelloWorldTestSpecs extends Specification {
 
 }
 }
+*/

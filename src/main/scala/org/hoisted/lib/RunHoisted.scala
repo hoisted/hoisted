@@ -2,13 +2,14 @@ package org.hoisted
 package lib
 
 import net.liftweb._
+import builtin.snippet._
 import common._
-import http.{S, LiftSession, LiftRules}
+import http._
 import util._
 import Helpers._
-import xml.NodeSeq
-import java.io.{FileInputStream, File}
 import java.util.Locale
+import java.io.{FileWriter, FileOutputStream, FileInputStream, File}
+import xml.{Elem, NodeSeq}
 
 /**
  * This singleton will take a directory, find all the files in the directory
@@ -17,6 +18,7 @@ import java.util.Locale
  */
 
 object RunHoisted extends HoistedRenderer
+
 
 trait HoistedRenderer {
   def apply(inDir: File, outDir: File): Box[HoistedTransformMetaData] = {
@@ -29,15 +31,98 @@ trait HoistedRenderer {
       fileMap = byName(parsedFiles)
       templates = createTemplateLookup(parsedFiles)
       transformedFiles = parsedFiles.map(f => runTemplater(f, templates))
-
+      done <- tryo(writeFiles(transformedFiles, inDir, outDir))
     } yield HoistedTransformMetaData()
   }
+
+  def writeFiles(toWrite: Seq[ParsedFile], inDir: File, outDir: File): Unit = {
+    val bufLen = 4096
+    val buffer = new Array[Byte](bufLen)
+
+    def translate(source: File): File = {
+      new File(outDir.getAbsolutePath + (source.getAbsolutePath.substring(inDir.getAbsolutePath.length)))
+    }
+
+    def calcFile(pf: ParsedFile with HasMetaData): File = translate(pf.fileInfo.file) // FIXME -- where do we put the file?
+
+    def copy(from: File, to: File) {
+      val in = new FileInputStream(from)
+      try {
+        to.getParentFile().mkdirs()
+        val out = new FileOutputStream(to)
+        try {
+          var len = 0
+          while ( {
+            len = in.read(buffer, 0, bufLen); len >= 0
+          }) {
+            if (len > 0) out.write(buffer, 0, bufLen)
+          }
+        } finally {
+          out.close()
+        }
+      } finally {
+        in.close()
+      }
+    }
+
+    toWrite.foreach {
+      case pf: ParsedFile with HasHtml with HasMetaData => if (shouldEmitFile(pf)) {
+        val where = calcFile(pf)
+        where.getParentFile.mkdirs()
+        val out = new FileWriter(where)
+        try {
+          Html5.write(pf.html.collect {
+            case e: Elem => e
+          }.headOption getOrElse <html/>, out, true, true)
+        } finally {
+          out.close()
+        }
+      }
+      case f => copy(f.fileInfo.file, translate(f.fileInfo.file))
+    }
+  }
+
+  def shouldEmitFile(pf: ParsedFile with HasMetaData): Boolean = true // FIXME look at metadata about file
 
   type TemplateLookup = PartialFunction[(List[String], String), ParsedFile]
 
   def createTemplateLookup(in: Seq[ParsedFile]): TemplateLookup = Map.empty // FIXME
 
-  def snippets: PartialFunction[(String, String), Box[NodeSeq => NodeSeq]] = Map.empty // FIXME
+  def snippets: PartialFunction[(String, String), Box[NodeSeq => NodeSeq]] = {
+    val m = Map(("surround", "render") -> Full(Surround.render _),
+      ("ignore", "render") -> Full(Ignore.render _),
+      ("tail", "render") -> Full(Tail.render _),
+      ("head", "render") -> Full(Head.render _),
+      ("withparam", "render") -> Full(WithParam.render _),
+      ("embed", "render") -> Full(Embed.render _),
+      ("if", "render") -> Full(testAttr _)
+    ).withDefaultValue(Empty)
+
+    new PartialFunction[(String, String), Box[NodeSeq => NodeSeq]] {
+      def isDefinedAt(in: (String, String)) = true
+
+      def apply(in: (String, String)) = {
+        m.apply(in._1.toLowerCase -> in._2.toLowerCase)
+      }
+    }
+  }
+
+  // Map.empty // FIXME
+
+  def testAttr(in: NodeSeq): NodeSeq = {
+    for {
+      toTest <- S.attr("toTest").toList
+      attr <- S.attr(toTest).toList if attr == "true"
+      node <- in
+    } yield node
+  }
+
+  /*
+  S.mapSnippet("choose", chooseNode _)
+  S.mapSnippet("a", link _)
+  S.mapSnippet("xmenu", menu _)
+  S.mapSnippet("subs", subs _)
+*/
 
   def runTemplater(f: ParsedFile, templates: TemplateLookup): ParsedFile = {
     val lu = new PartialFunction[(Locale, List[String]), Box[NodeSeq]] {
@@ -46,13 +131,28 @@ trait HoistedRenderer {
       def apply(in: (Locale, List[String])): Box[NodeSeq] = Empty
     }
     val localSnippets = snippets
-    val session = new LiftSession("", Helpers.nextFuncName, Empty)
+    val session = new LiftSession("", Helpers.nextFuncName, Empty) with StatelessSession
+
+    def insureChrome(todo: ParsedFile with HasMetaData, node: NodeSeq): NodeSeq =
+      session.merge(if ((node \ "html" \ "body").length > 0) node
+      else
+        session.processSurroundAndInclude("Chrome", <lift:surround with="default" at="content">
+          {node}
+        </lift:surround>), Req.nil)
+
     S.initIfUninitted(session) {
       LiftRules.allowParallelSnippets.doWith(() => false) {
         LiftRules.allowAttributeSnippets.doWith(() => false) {
           LiftRules.snippetWhiteList.doWith(() => localSnippets) {
             LiftRules.externalTemplateResolver.doWith(() => () => lu) {
-              f // FIXME run the template and then perhaps fix it up
+              f match {
+                case todo: ParsedFile with HasHtml with HasMetaData =>
+                  HtmlFile(todo.fileInfo,
+                    insureChrome(todo,
+                      session.processSurroundAndInclude(todo.fileInfo.pureName, todo.html)),
+                    todo.metaData)
+                case d => d
+              }
             }
           }
         }
@@ -110,7 +210,7 @@ final case class FileInfo(file: File, name: String, pureName: String, suffix: Op
 
 object ParsedFile {
   def findBody(in: NodeSeq): NodeSeq =
-    (in \ "content").headOption getOrElse in
+    (in \ "content").headOption.map(_.child) getOrElse in
 
 
   def apply(fi: FileInfo): Box[ParsedFile] = {
