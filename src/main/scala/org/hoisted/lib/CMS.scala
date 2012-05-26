@@ -1,4 +1,4 @@
-package com.liftweb
+package org.hoisted
 package lib
 
 import net.liftweb._

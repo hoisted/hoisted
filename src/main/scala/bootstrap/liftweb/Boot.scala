@@ -9,7 +9,7 @@ import http._
 import sitemap._
 import Loc._
 
-import com.liftweb._
+import org.hoisted._
 import lib._
 
 /**
@@ -38,7 +38,7 @@ class Boot {
     */
 
     // where to search snippet
-    LiftRules.addToPackages("com.liftweb")
+    LiftRules.addToPackages("org.hoisted")
     
     CMSStore.defaultHost
 
