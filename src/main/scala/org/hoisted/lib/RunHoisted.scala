@@ -12,7 +12,12 @@ import java.io.{FileWriter, FileOutputStream, FileInputStream, File}
 import org.eclipse.jgit.api.Git
 import xml._
 import org.joda.time.DateTime
-import MetadataMeta._
+import org.joda.time.format.{DateTimeFormat, DateTimeFormatter}
+
+
+object VeryTesty {
+  def apply() = RunHoisted(new File("/Users/dpp/tmp/frog"), new File("/Users/dpp/tmp/outfrog"))
+}
 
 /**
  * This singleton will take a directory, find all the files in the directory
@@ -22,233 +27,9 @@ import MetadataMeta._
 
 object RunHoisted extends HoistedRenderer
 
-trait EnvironmentManager {
-  private var metadata: MetadataMeta.Metadata = Map()
-  var menuEntries: List[MenuEntry] = Nil
-
-  def menuTitle: NodeSeq => NodeSeq =
-    "* *" #> (
-      CurrentFile.box.map(computeTitle) openOr "Telegram Site")
-
-  def siteName: NodeSeq => NodeSeq = {
-    "* *" #> (findString(SiteNameKey, metadata) openOr "Telegram")
-  }
-
-  def menuItems: NodeSeq => NodeSeq =
-  "li" #> menuEntries.map{
-    case MenuEntry(pf, _) => "a *" #> computeLinkText(pf) &
-    "a [href]" #> computeLink(pf) &
-      "li [class+]" #> Full("active").filter(a => (pf eq CurrentFile.value))
-  }
-
-  def computeDestinationPathFunc: ParsedFile => PathAndSuffix = pf => pf.fileInfo.pathAndSuffix
-  def findDefaultTemplate: List[ParsedFile] => Box[ParsedFile] = lpf => lpf.find{p =>
-    p.pathAndSuffix.path == List("templates-hidden", "default" ) ||
-      (p.findData(DefaultTemplateKey).flatMap(_.asBoolean) openOr false)
-  }
-  def needsTemplates: List[ParsedFile] => Boolean = lpf => findDefaultTemplate(lpf).isEmpty
-
-  def computeMenuItems: List[ParsedFile] => List[MenuEntry] = pf =>
-    pf.filter(shouldWriteHtmlFile).filter(isHtmlFile).filter(a => !isBlogPost(a)).
-      filter(a => !isEvent(a)).map(pf => MenuEntry(pf, Nil))
-
-
-  def isBlogPost: ParsedFile => Boolean = _.findData(PostKey).flatMap(_.asBoolean) openOr false
-
-  def isEvent: ParsedFile => Boolean = _.findData(EventKey).flatMap(_.asBoolean) openOr false
-
-
-  def isHtmlFile: ParsedFile => Boolean = {
-    case x: HasHtml => true
-    case _ => false
-  }
-
-  def shouldWriteHtmlFile: ParsedFile => Boolean =
-  pf => {
-    pf.findData(ServeKey).flatMap(_.asBoolean) openOr (pf.pathAndSuffix.path match {
-    case "templates-hidden" :: _ => false
-    case x => x.filter(_.startsWith("_")).isEmpty
-  })
-  }
-
-  /**
-  * Are there any blog posts
-*/
-  def hasBlogPosts: List[ParsedFile] => Boolean =
-    pf =>
-      (findBoolean(HasBlogKey, metadata) or findString(BlogRootKey, metadata).map(_ => true)) openOr
-  pf.toStream.flatMap(pf => pf.findData(PostKey).flatMap(_.asBoolean).filter(a => a)).headOption.isDefined
-
-  def computeBlogRoot: () => String = () => findString(BlogRootKey, metadata) openOr "/blog"
-
-  /**
-   * compute the URL of the Git repo with the template in it
- */
-  def computeTemplateURL: () => String =
-    () => (findMetadata(TemplateURLKey).flatMap(_.asString).filter(
-    s => s.startsWith("http") && s.endsWith(".git")
-    )) openOr "https://github.com/telegr-am/template-base.git"
-
-  def loadTemplates: (HoistedRenderer, String, List[ParsedFile]) => List[ParsedFile] = (render, url, cur) =>
-  {
-    val cloner = Git.cloneRepository()
-    cloner.setURI(url)
-    val dir = File.createTempFile("fog", "dog")
-    dir.delete()
-    dir.mkdirs()
-    cloner.setDirectory(dir)
-    cloner.call()
-    val allFiles = render.allFiles(dir, f => f.exists() && !f.getName.startsWith(".") && f.getName.toLowerCase != "readme" &&
-    f.getName.toLowerCase != "readme.md")
-    val fileInfo = allFiles.map(render.fileInfo(dir))
-    val parsedFiles = fileInfo.flatMap(ParsedFile.apply _)
-
-    val curSet = Set(cur.map(_.fileInfo.pathAndSuffix) :_*)
-
-    parsedFiles.filter(pf => !curSet.contains(pf.fileInfo.pathAndSuffix)) ::: cur
-  }
-
-  def appendMetadata(key: MetadataKey, value: MetadataValue) {
-    metadata = set(metadata, key, value)
-  }
-
-  /**
-  * Find a metadata entry
-  */
-  def findMetadata(key: MetadataKey): Box[MetadataValue] = metadata.get(key)
-
-
-  /**
-  * Compute the title from the filename
-*/
-  def computeTitleFromFileName: (ParsedFile) => String =
-  pf => capify(pf.pathAndSuffix.path.takeRight(1).head)
-
-  /**
-  * Replace the '_' with ' ' and then make the first character
-  * of each word upper case
-*/
-  def capify: String => String = str =>
-  str.replace('_', ' ').roboSplit(" ") match {
-    case List("index") => "Home"
-    case xs => xs.map(_.toList match {
-      case c :: rest => (c.toUpper :: rest).mkString
-      case _ => ""
-    }).mkString(" ")
-  }
-
-  /**
-  * Compute the title of the file
-  */
-  def computeTitle: (ParsedFile) => String = pf => {
-    pf match {
-      case md: ParsedFile with HasMetaData => md.findData(TitleKey).flatMap(_.asString) or
-        pf.findData(LinkKey).flatMap(_.asString) openOr computeTitleFromFileName(pf)
-      case _ => computeTitleFromFileName(pf)
-    }
-  }
-
-  /**
-  * Compute the link text for the file
-*/
-  def computeLinkText: (ParsedFile) => String =
-  pf => pf.findData(LinkKey).flatMap(_.asString) openOr computeTitle(pf)
-
-  /**
-  * Collect the HTML files
-*/
-  def collectHtml: List[ParsedFile] => List[ParsedFile with HasHtml] =
-  in => in.collect {
-    case x: ParsedFile with HasHtml => x
-  }
-
-  /**
-  * Collect the files to be rendered as Html and written to the filesystem
-*/
-  def collectRendered: List[ParsedFile] => List[ParsedFile with HasHtml] =
-    in => in.collect {
-      case x: ParsedFile with HasHtml with HasMetaData if shouldWriteHtmlFile(x) => x
-    }
-
-  def updateMetadata: (MetadataMeta.Metadata, FileInfo) => MetadataMeta.Metadata =
-  (md, fi) => {
-    var fixedMd = md
-    // test to see if it's a post
-    findBoolean(PostKey, fixedMd) match {
-      case Full(_) => // do nothing
-      case _ => findString(LayoutKey, fixedMd).map(_.toLowerCase) match {
-        case Full("post") => fixedMd = set(fixedMd, PostKey, true)
-        case Full(_) => // do nothing
-        case _ => fi.pathAndSuffix.path match {
-          case "_post" :: _ => fixedMd = set(fixedMd, PostKey, true)
-          case _ => // do nothing
-        }
-      }
-    }
-
-    // test to see if it's an event
-    findBoolean(EventKey, fixedMd) match {
-      case Full(_) => // do nothing
-      case _ => findString(LayoutKey, fixedMd).map(_.toLowerCase) match {
-        case Full("event") => fixedMd = set(fixedMd, EventKey, true)
-        case Full(_) => // do nothing
-        case _ => fi.pathAndSuffix.path match {
-          case "_event" :: _ => fixedMd = set(fixedMd, EventKey, true)
-          case _ => // do nothing
-        }
-      }
-    }
-
-    // deal with the date
-    findDate(DateKey, fixedMd) match {
-      case Full(_) =>
-      case _ => findDate(ValidFromKey, fixedMd) match {
-        case Full(date) => fixedMd = set(fixedMd, DateKey, date)
-        case _ =>
-          ParsedFile.uglyParseDate(fi.name) match {
-            case Full(date) => fixedMd = set(fixedMd, DateKey, date)
-            case _ => fixedMd = set(fixedMd, DateKey, new DateTime(fi.file.lastModified()))
-          }
-      }
-    }
-
-    fixedMd
-  }
-
-  def insureHtmlSuffix: String => String = str => (str.trim.toLowerCase match {
-    case s if s.endsWith(".html")  => s
-    case s => s+".html"
-  }) match {
-    case s if s.startsWith("/") => s
-    case s => "/"+s
-  }
-
-  def striptHtmlSuffix: String => String = str => if (str.endsWith(".html")) str.dropRight(5) else str
-
-  def computeOutputFileName: ParsedFile => String = m => {
-    val ret =
-    m.findData(OutputPathKey).flatMap(_.asString).map(insureHtmlSuffix) openOr m.pathAndSuffix.path.mkString("/", "/", ".html")
-
-    (m.findData(PostKey).flatMap(_.asBoolean).filter(a => a).map(a => computeBlogRoot()) openOr  "") + ret
-  }
-
-  def computeLink: ParsedFile => String = pf => striptHtmlSuffix(computeOutputFileName(pf)) match {
-    case s if s.endsWith("/index") => s.dropRight(5)
-    case s => s
-  }
-}
-
-/**
-* An instance of the EnvironmentManager that just inherits the default behavior
-*/
-class DefaultEnvironmentManager extends EnvironmentManager
-
-/**
-* The current environment manager, so it doesn't have to be passed around
-*/
-object HoistedEnvironmentManager extends ThreadGlobal[EnvironmentManager]
-
 object CurrentFile extends ThreadGlobal[ParsedFile]
+
+object PostPageTransforms extends TransientRequestVar[Vector[NodeSeq => NodeSeq]](Vector())
 
 trait HoistedRenderer {
   def apply(inDir: File, outDir: File, environment: EnvironmentManager = new DefaultEnvironmentManager): Box[HoistedTransformMetaData] = {
@@ -259,7 +40,7 @@ trait HoistedRenderer {
         allFiles <- tryo(allFiles(inDir,f => f.exists() && !f.getName.startsWith(".") && f.getName.toLowerCase != "readme" &&
           f.getName.toLowerCase != "readme.md"))
         fileInfo <- tryo(allFiles.map(fileInfo(inDir)))
-        _parsedFiles = (fileInfo: List[FileInfo]).flatMap(ParsedFile.apply _)
+        _parsedFiles = (fileInfo: List[FileInfo]).flatMap(ParsedFile.apply _).filter(HoistedEnvironmentManager.value.isValid)
         parsedFiles = ensureTemplates(_parsedFiles)
 
         fileMap = byName(parsedFiles)
@@ -267,7 +48,11 @@ trait HoistedRenderer {
         menu = HoistedEnvironmentManager.value.computeMenuItems(parsedFiles)
         _ = HoistedEnvironmentManager.value.menuEntries = menu
 
+        posts = HoistedEnvironmentManager.value.computePosts(parsedFiles)
+        _ = HoistedEnvironmentManager.value.blogPosts = posts
+
         transformedFiles = parsedFiles.map(f => runTemplater(f, templates))
+
         done <- tryo(writeFiles(transformedFiles, inDir, outDir))
       } yield HoistedTransformMetaData()
     }
@@ -338,6 +123,7 @@ trait HoistedRenderer {
         val where = calcFile(pf)
         where.getParentFile.mkdirs()
         val out = new FileWriter(where)
+        out.write("<!DOCTYPE html>\n")
         try {
           Html5.write(pf.html.collect {
             case e: Elem => e
@@ -345,9 +131,13 @@ trait HoistedRenderer {
         } finally {
           out.close()
         }
+        where.setLastModified(HoistedEnvironmentManager.value.computeDate(pf).getMillis)
       }
-      case f if (shouldEmitFile(f)) => copy(f.fileInfo.file, translate(f.fileInfo.relPath))
-      case _ =>
+      case f if (shouldEmitFile(f)) =>
+        val where = translate(f.fileInfo.relPath)
+        copy(f.fileInfo.file, where)
+        where.setLastModified(HoistedEnvironmentManager.value.computeDate(f).getMillis)
+      case x =>
     }
   }
 
@@ -366,6 +156,39 @@ trait HoistedRenderer {
   }
 
 
+  def blogPosts: NodeSeq => NodeSeq = {
+    val posts = HoistedEnvironmentManager.value.blogPosts.take(S.attr("max").flatMap(Helpers.asInt _) openOr Integer.MAX_VALUE)
+
+    val m = HoistedEnvironmentManager.value
+
+    val f = DateTimeFormat.mediumDate()
+
+    ("data-post=item" #> posts.map(p => "data-post=link [href]" #> m.computeLink(p) &
+      "data-post=link *" #> m.computeLinkText(p) &
+      "data-post=shortcontent" #> m.computeShortContent(p) &
+      "data-post=content" #> m.computeContent(p) &
+      "data-post=date *" #> f.print(m.computeDate(p)))) andThen "* [data-post]" #> (Empty: Box[String])
+  }
+
+  def xform: NodeSeq => NodeSeq = ns => {
+    for {
+      css <- (ns.collect {
+        case e: Elem => e
+      }.flatMap(_.attribute("data-css")).headOption.map(_.text): Option[String])
+      thing: NodeSeq = S.attr("kids").
+        flatMap(Helpers.asBoolean).
+        filter(a => a).map(ignore => ns.collect {
+        case e: Elem => e
+      }.flatMap(_.child): NodeSeq) openOr
+        (("* [data-css]" #> (None: Option[String])).apply(ns))
+      xf <- (Helpers.tryo(css #> thing): Box[NodeSeq => NodeSeq])
+    } {
+      PostPageTransforms.set(PostPageTransforms.get :+ xf)
+    }
+
+    NodeSeq.Empty
+    }
+
 
   def doTitle(ns: NodeSeq): NodeSeq = <head><title>{ns.text}</title></head>
 
@@ -381,6 +204,8 @@ trait HoistedRenderer {
       ("withparam", "render") -> Full(WithParam.render _),
       ("embed", "render") -> Full(Embed.render _),
       ("if", "render") -> Full(testAttr _),
+      ("xform", "render") -> Full(xform),
+      ("blog", "posts") -> Full(blogPosts),
       ("bootstraputil", "headcomment") -> Full((ignore: NodeSeq) => BootstrapUtil.headComment),
       ("bootstraputil", "bodycomment") -> Full((ignore: NodeSeq) => BootstrapUtil.bodyComment)
     ).withDefaultValue(Empty)
@@ -436,12 +261,16 @@ trait HoistedRenderer {
     }
 
     def insureChrome(todo: ParsedFile with HasMetaData, node: NodeSeq): NodeSeq = {
-      session.merge(if ((node \\ "html" \\ "body").length > 0) node
+      val _processed = if ((node \\ "html" \\ "body").length > 0) node
       else {
         session.processSurroundAndInclude("Chrome", <lift:surround with="default" at="content">
           {node}
         </lift:surround>)
-      }, Req.nil)
+      }
+
+      val processed = PostPageTransforms.get.foldLeft(_processed)((ns, f) => f(ns))
+
+      session.merge(processed, Req.nil)
     }
 
     S.initIfUninitted(session) {

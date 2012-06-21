@@ -9,7 +9,16 @@ import util.Helpers
 import org.hoisted.lib.MetadataValue._
 
 object MetadataValue {
-  def apply(in: String): MetadataValue = StringMetadataValue(in)
+  lazy val hasSquareBraces = """(?:\[|\{)((?:[^,;\]}]+(?:,|;)?)+)(?:\]|\})""".r
+
+  lazy val tagEntry = """([^,;]+)(?:,|;)?""".r
+
+  def apply(in: String): MetadataValue = hasSquareBraces.findAllIn(in).matchData.toList match {
+    case md :: _ =>
+      val str = md.group(1)
+      ListMetadataValue(tagEntry.findAllIn(str).matchData.toList.map(_.group(1).trim).map(StringMetadataValue.apply))
+    case _ => StringMetadataValue(in)
+  }
 
   def apply(in: (Option[String], Option[NodeSeq])): MetadataValue = in match {
     case (Some(str), None) => StringMetadataValue(str)
@@ -37,6 +46,8 @@ trait MetadataValue {
   def asInt: Box[Int]
 
   def asDate: Box[DateTime]
+
+  def asListString: List[String] = asString.toList
 }
 
 case object NullMetadataValue extends MetadataValue {
@@ -65,6 +76,7 @@ final case class ListMetadataValue(lst: List[MetadataValue]) extends MetadataVal
     case x => ListMetadataValue(lst ::: List(other))
   }
 
+  override lazy val asListString: List[String] = lst.flatMap(_.asListString)
   lazy val asString: Box[String] = lst.flatMap(_.asString).headOption
   lazy val asBoolean: Box[Boolean] = lst.flatMap(_.asBoolean).headOption
   lazy val asDate: Box[DateTime] = lst.flatMap(_.asDate).headOption

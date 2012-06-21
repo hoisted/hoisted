@@ -109,6 +109,11 @@ case object EventKey extends MetadataKey {
   def key = "event"
 }
 
+case object CategoryKey extends MetadataKey {
+  def global = false
+
+  def key = "category"
+}
 
 case object LayoutKey extends MetadataKey {
   def global = false
@@ -134,12 +139,19 @@ case object HasBlogKey extends MetadataKey {
   def key = "has_blog"
 }
 
+case object TagsKey extends MetadataKey {
+  def global = false
+
+  def key = "tag"
+}
+
 object MetadataKey {
   lazy val knownKeys = List(OrderKey, OutputPathKey, TemplateURLKey, SiteNameKey, LinkKey,
     TitleKey, DefaultTemplateKey, ServeKey,
-  BlogRootKey,
+    BlogRootKey,
     DateKey,
-  HasBlogKey,
+    CategoryKey,
+    HasBlogKey, TagsKey,
     ValidFromKey, ValidToKey, EventKey, PostKey, LayoutKey)
 
   implicit def strToKey(in: String): MetadataKey = this.apply(in)
@@ -160,7 +172,8 @@ final case class StringMetadataKey private(key: String) extends MetadataKey {
   private var _top: Boolean = false
 
   def this(str: String, top: Boolean) {
-    this(str.trim.toLowerCase); this._top = top
+    this(str.trim.toLowerCase);
+    this._top = top
   }
 
   def global = _top
