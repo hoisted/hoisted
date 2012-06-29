@@ -41,6 +41,12 @@ case object DefaultTemplateKey extends MetadataKey {
   def key = "default_template"
 }
 
+case object TemplateKey extends MetadataKey {
+  def global = false
+
+  def key = "template"
+}
+
 case object OutputPathKey extends MetadataKey {
   def global = false
 
@@ -81,7 +87,12 @@ case object OrderKey extends MetadataKey {
   def global = false
 
   def key = "order"
+}
 
+case object TypeKey extends MetadataKey {
+  def global = false
+
+  def key = "type"
 }
 
 case object TemplateURLKey extends MetadataKey {
@@ -147,8 +158,8 @@ case object TagsKey extends MetadataKey {
 
 object MetadataKey {
   lazy val knownKeys = List(OrderKey, OutputPathKey, TemplateURLKey, SiteNameKey, LinkKey,
-    TitleKey, DefaultTemplateKey, ServeKey,
-    BlogRootKey,
+    TitleKey, TemplateKey, ServeKey,
+    BlogRootKey, TypeKey,
     DateKey,
     CategoryKey,
     HasBlogKey, TagsKey,

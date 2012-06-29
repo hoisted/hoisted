@@ -2,6 +2,7 @@ package org.hoisted.lib
 
 import net.liftweb._
 import common._
+import http.Templates
 import util._
 import Helpers._
 import MetadataMeta._
@@ -22,6 +23,7 @@ trait EnvironmentManager {
   private var metadata: MetadataMeta.Metadata = Map()
   var menuEntries: List[MenuEntry] = Nil
   var blogPosts: List[ParsedFile] = Nil
+  var pages: List[ParsedFile] = Nil
 
   def menuTitle: NodeSeq => NodeSeq =
     "* *" #> (
@@ -38,17 +40,48 @@ trait EnvironmentManager {
         "li [class+]" #> Full("active").filter(a => (pf eq CurrentFile.value))
     }
 
+  /**
+   * Finds all the valid pages if they have a tag
+   * @return
+   */
+  def findByTag: (String, Box[String]) => List[ParsedFile] = (tag, cmp) => {
+    val key = MetadataKey(tag)
+
+    pages.filter(_.findData(key) match {
+      case fv@ Full(v) if cmp.isEmpty || fv.flatMap(_.asString) == cmp => true
+      case _ => false
+    }).filter(isValid).sortWith{
+      case (a, b) =>
+        val d1 = computeDate(a)
+        val d2 = computeDate(b)
+        d1.getMillis > d2.getMillis
+    }
+  }
+
   def computeDestinationPathFunc: ParsedFile => PathAndSuffix = pf => pf.fileInfo.pathAndSuffix
-  def findDefaultTemplate: List[ParsedFile] => Box[ParsedFile] = lpf => lpf.find{p =>
+
+  private def findDefaultTemplate: List[ParsedFile] => Box[ParsedFile] = lpf => lpf.find{p =>
     p.pathAndSuffix.path == List("templates-hidden", "default" ) ||
       (p.findData(DefaultTemplateKey).flatMap(_.asBoolean) openOr false)
   }
-  def needsTemplates: List[ParsedFile] => Boolean = lpf => findDefaultTemplate(lpf).isEmpty
 
+  def needsTemplates: List[ParsedFile] => Boolean = lpf => findDefaultTemplate(lpf).isEmpty
 
   def computePosts: List[ParsedFile] => List[ParsedFile] = f => {
     val ret = f.filter(isBlogPost).sortWith(compareBlogPosts)
     ret
+  }
+
+  private def testTemplateName(name: String): Box[String] = {
+    val ns = name.roboSplit("/")
+    (Templates("templates-hidden" :: ns) or Templates(ns)).map(ignore => name)
+  }
+
+  def chooseTemplateName: ParsedFile => String = pf => {
+    (pf.findData(TemplateKey).flatMap(_.asString).flatMap(testTemplateName(_)) or
+    pf.findData(PostKey).flatMap(_.asBoolean).filter(a => a).flatMap(ignore => testTemplateName("post")) or
+    pages.find(_.findData(DefaultTemplateKey).flatMap(_.asBoolean) openOr false).headOption.map(_.pathAndSuffix.path.mkString("/", "/", ""))) openOr
+    "default"
   }
 
 
@@ -68,11 +101,11 @@ trait EnvironmentManager {
   }
 
   @scala.annotation.tailrec
-  final def makeShortHtml(in: List[Node]): NodeSeq = {
-    if (in.length == 1) in else {
+  final def makeShortHtml(in: List[Node], changed: Boolean): (NodeSeq, Boolean) = {
+    if (in.length == 1) (in, changed) else {
     val ns: NodeSeq = in
     val tl = ns.text.length
-    if (tl < 700) ns else makeShortHtml(in.dropRight(1))
+    if (tl < 700) (ns, changed) else makeShortHtml(in.dropRight(1), true)
     }
   }
 
@@ -81,12 +114,12 @@ trait EnvironmentManager {
     case _ => NodeSeq.Empty
   }
 
-  def computeShortContent: ParsedFile => NodeSeq = {
+  def computeShortContent: ParsedFile => (NodeSeq, Boolean) = {
     case h: HasHtml => h.html.toList match {
-      case x :: Nil => makeShortHtml(x.child.toList)
-      case xs => makeShortHtml(xs)
+      case x :: Nil => makeShortHtml(x.child.toList, false)
+      case xs => makeShortHtml(xs, false)
     }
-    case _ => NodeSeq.Empty
+    case _ => (NodeSeq.Empty, false)
   }
 
   def compareBlogPosts: (ParsedFile, ParsedFile) => Boolean = {
@@ -235,8 +268,6 @@ trait EnvironmentManager {
       var fixedMd = md
       var pathling = fi.name
 
-      println("Updating metadata for "+fi)
-
       // test to see if it's a post
       findBoolean(PostKey, fixedMd) match {
         case Full(_) => // do nothing
@@ -283,8 +314,6 @@ trait EnvironmentManager {
         fixedMd = set(fixedMd, OutputPathKey, "/"+pathling)
       }
 
-      println("New Metadata "+fixedMd)
-
       fixedMd
     }
 
@@ -301,15 +330,33 @@ trait EnvironmentManager {
   def striptHtmlSuffix: String => String = str => if (str.endsWith(".html")) str.dropRight(5) else str
 
   def computeOutputFileName: ParsedFile => String = m => {
+    if (isHtml(m)) {
     val ret =
       m.findData(OutputPathKey).flatMap(_.asString).map(insureHtmlSuffix) openOr m.pathAndSuffix.path.mkString("/", "/", ".html")
 
     multiSlash.replaceAllIn((m.findData(PostKey).flatMap(_.asBoolean).filter(a => a).map(a => computeBlogRoot()) openOr  "") + ret, "/")
+    } else {
+        m.findData(OutputPathKey).flatMap(_.asString) openOr m.pathAndSuffix.path.mkString("/", "/", "")
+    }
   }
 
-  def computeLink: ParsedFile => String = pf => striptHtmlSuffix(computeOutputFileName(pf)) match {
+  def computeLink: ParsedFile => String = pf =>
+    pf.findData("redirect").flatMap(_.asString) openOr
+    striptHtmlSuffix(computeOutputFileName(pf)) match {
     case s if s.endsWith("/index") => s.dropRight(5)
     case s => s
+  }
+
+  def isHtml: ParsedFile => Boolean = pf => {
+    pf match {
+      case hh: HasHtml =>
+        pf.findData(TypeKey).flatMap(_.asString) match {
+          case Full("html") => true
+          case Full(_) => false
+          case _ => true
+        }
+      case _ => false
+    }
   }
 
 

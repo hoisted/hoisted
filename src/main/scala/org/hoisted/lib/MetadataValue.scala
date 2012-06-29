@@ -47,7 +47,9 @@ trait MetadataValue {
 
   def asDate: Box[DateTime]
 
-  def asListString: List[String] = asString.toList
+  def asNodeSeq: Box[NodeSeq] = Empty
+
+  def asListString: Box[List[String]] = Empty
 }
 
 case object NullMetadataValue extends MetadataValue {
@@ -76,11 +78,16 @@ final case class ListMetadataValue(lst: List[MetadataValue]) extends MetadataVal
     case x => ListMetadataValue(lst ::: List(other))
   }
 
-  override lazy val asListString: List[String] = lst.flatMap(_.asListString)
+  override lazy val asListString: Box[List[String]] = Full(lst.flatMap{
+    case lmd: ListMetadataValue => lmd.asListString.toList.flatMap(a => a)
+    case x => x.asString.toList
+  })
+
   lazy val asString: Box[String] = lst.flatMap(_.asString).headOption
   lazy val asBoolean: Box[Boolean] = lst.flatMap(_.asBoolean).headOption
   lazy val asDate: Box[DateTime] = lst.flatMap(_.asDate).headOption
   lazy val asInt: Box[Int] = lst.flatMap(_.asInt).headOption
+  override lazy val asNodeSeq: Box[NodeSeq] = lst.collect{case NodeSeqMetadataValue(v) => v}.headOption
 }
 
 final case class BooleanMetadataValue(b: Boolean) extends MetadataValue  {
@@ -101,7 +108,7 @@ final case class DateTimeMetadataValue(date: DateTime) extends MetadataValue  {
     case x => ListMetadataValue(this :: other :: Nil)
   }
 
-  lazy val asString: Box[String] = Full(ISODateTimeFormat.basicDateTime().print(date))
+  def asString: Box[String] = Empty
   def asBoolean: Box[Boolean] = Empty
   def asDate: Box[DateTime] = Full(date)
   def asInt: Box[Int] = Empty
@@ -117,5 +124,6 @@ final case class NodeSeqMetadataValue(ns: NodeSeq) extends MetadataValue  {
   def asBoolean: Box[Boolean] = Empty
   def asDate: Box[DateTime] = Empty
   def asInt: Box[Int] = Empty
+  override def asNodeSeq: Box[NodeSeq] = Full(ns)
 }
 

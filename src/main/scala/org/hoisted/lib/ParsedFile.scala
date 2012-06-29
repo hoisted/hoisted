@@ -70,7 +70,7 @@ object ParsedFile {
 
   def apply(fi: FileInfo): Box[ParsedFile] = {
     fi.suffix.map(_.toLowerCase) match {
-      case Some("xml") =>
+      case Some("xml") | Some("cms.xml") =>
         for {
           fis <- tryo(new FileInputStream(fi.file))
           xml <- PCDataXmlParser(fis)
@@ -103,7 +103,10 @@ object ParsedFile {
     }
   }
 
-  def findHtmlMetaData(in: NodeSeq): (NodeSeq, MetadataMeta.Metadata) = (in, Map.empty) // FIXME
+  def findHtmlMetaData(in: NodeSeq): (NodeSeq, MetadataMeta.Metadata) = {
+
+    (in, Map.empty) // FIXME
+  }
 
   def findXmlMetaData(in: NodeSeq): MetadataMeta.Metadata = {
     val somePairs: List[(String, String)] = (in \\ "cms").toList.flatMap {
