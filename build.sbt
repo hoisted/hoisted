@@ -17,11 +17,14 @@ resolvers += "Scala" at "https://oss.sonatype.org/content/groups/scala-tools/"
 
 resolvers += "Java.net Maven2 Repository" at "http://download.java.net/maven/2/"
 
+resolvers += "Media4u101 SNAPSHOT Repository" at "http://www.media4u101.se:8081/nexus/content/repositories/snapshots/"
+
 libraryDependencies ++= {
   val liftVersion = "2.5-SNAPSHOT"
   Seq(
     "net.liftweb" %% "lift-webkit" % liftVersion % "compile",
-    "net.liftweb" %% "lift-mapper" % "2.5-SNAPSHOT" % "compile"
+    "net.liftweb" %% "lift-mapper" % "2.5-SNAPSHOT" % "compile",
+    "net.liftmodules" %% "fobo" % (liftVersion+"-0.5.0-SNAPSHOT")
     )
 }
 
