@@ -12,6 +12,8 @@ import Loc._
 import org.hoisted._
 import lib._
 
+import net.liftmodules.FoBo
+
 /**
  * A class that's instantiated early and run.  It allows the application
  * to modify lift's environment
@@ -39,6 +41,11 @@ class Boot {
 
     // where to search snippet
     LiftRules.addToPackages("org.hoisted")
+    
+    FoBo.InitParam.JQuery=FoBo.JQuery171  
+    FoBo.InitParam.ToolKit=FoBo.Bootstrap204
+    FoBo.InitParam.ToolKit=FoBo.PrettifyJun2011
+    FoBo.init()
     
     CMSStore.defaultHost
 
