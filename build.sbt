@@ -1,7 +1,7 @@
 //Project Information
 name := "Hoisted"
 
-scalaVersion := "2.9.1"
+scalaVersion := "2.9.2"
 
 scalacOptions += "-deprecation"
 
@@ -9,7 +9,7 @@ autoCompilerPlugins := true
 
 checksums := Nil
 
-seq(webSettings :_*)
+// seq(webSettings :_*)
 
 resolvers += "Scala Snapshots" at "https://oss.sonatype.org/content/repositories/snapshots/" 
 
@@ -27,13 +27,10 @@ libraryDependencies ++= {
 
 libraryDependencies ++= {
   Seq(
-    "javax.servlet" % "servlet-api" % "2.5" % "provided->default",
-    "com.h2database" % "h2" % "1.3.167",
-    "ch.qos.logback" % "logback-classic" % "1.0.6" % "compile->default",
     "junit" % "junit" % "4.7" % "test",
     "org.pegdown" %  "pegdown" % "1.1.0",
     "org.eclipse.jgit" % "org.eclipse.jgit" % "1.3.0.201202151440-r",
-    "org.mortbay.jetty" % "jetty" % "6.1.22" % "test,container",
+    "org.mortbay.jetty" % "jetty" % "6.1.22" % "test",
     "org.scala-tools.testing" %% "specs" % "1.6.9" % "test"
   )
 }
