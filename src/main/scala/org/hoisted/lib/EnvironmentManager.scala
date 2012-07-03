@@ -1,8 +1,10 @@
 package org.hoisted.lib
 
 import net.liftweb._
+import builtin.snippet._
 import common._
-import http.Templates
+import common.Full
+import http.{RequestVar, Templates}
 import util._
 import Helpers._
 import MetadataMeta._
@@ -55,6 +57,55 @@ trait EnvironmentManager {
         val d1 = computeDate(a)
         val d2 = computeDate(b)
         d1.getMillis > d2.getMillis
+    }
+  }
+
+  def beginRendering: ParsedFile => Unit = pf => ()
+
+  def endRendering: ParsedFile => Unit = pf => ()
+
+
+  def snippets: PartialFunction[(String, String), Box[NodeSeq => NodeSeq]] = snippetCalculator.get
+
+  var externalSnippets: List[PartialFunction[(String, String), Box[NodeSeq => NodeSeq]]] = Nil
+
+  object snippetCalculator extends RequestVar[PartialFunction[(String, String), Box[NodeSeq => NodeSeq]]](
+  externalSnippets.foldLeft[PartialFunction[(String, String),
+    Box[NodeSeq => NodeSeq]]](Map.empty)(_ orElse _) orElse baseSnippets
+  )
+
+  def baseSnippets: PartialFunction[(String, String), Box[NodeSeq => NodeSeq]] = {
+    val m: Map[(String, String), Box[NodeSeq => NodeSeq]] = Map(("surround", "render") -> Full(Surround.render _),
+      ("ignore", "render") -> Full(Ignore.render _),
+      ("tail", "render") -> Full(Tail.render _),
+      ("head", "render") -> Full(Head.render _),
+      ("a", "render") -> Full(BaseSnippets.doA),
+      ("choose", "render") -> Full(BaseSnippets.doChoose _),
+      ("subs", "render") -> Full(BaseSnippets.doSubs _),
+      ("xmenu", "render") -> Full(BaseSnippets.doXmenu),
+      ("bind", "render") -> Full(BaseSnippets.doBind),
+      ("menu", "title") -> Full(menuTitle),
+      ("menu", "items") -> Full(menuItems),
+      ("site", "name") -> Full(siteName),
+      ("title", "render") -> Full(BaseSnippets.doTitle _),
+      ("withparam", "render") -> Full(WithParam.render _),
+      ("embed", "render") -> Full(Embed.render _),
+      ("if", "render") -> Full(BaseSnippets.testAttr _),
+      ("xform", "render") -> Full(BaseSnippets.xform),
+      ("page-info", "render") -> Full(BaseSnippets.pageInfo),
+      ("page_info", "render") -> Full(BaseSnippets.pageInfo),
+      ("pageinfo", "render") -> Full(BaseSnippets.pageInfo),
+      ("blog", "posts") -> Full(BaseSnippets.blogPosts),
+      ("bootstraputil", "headcomment") -> Full((ignore: NodeSeq) => BootstrapUtil.headComment),
+      ("bootstraputil", "bodycomment") -> Full((ignore: NodeSeq) => BootstrapUtil.bodyComment)
+    ).withDefaultValue(Empty)
+
+    new PartialFunction[(String, String), Box[NodeSeq => NodeSeq]] {
+      def isDefinedAt(in: (String, String)) = true
+
+      def apply(in: (String, String)): Box[NodeSeq => NodeSeq] = {
+        m.apply(in._1.toLowerCase -> in._2.toLowerCase)
+      }
     }
   }
 
