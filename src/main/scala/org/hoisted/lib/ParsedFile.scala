@@ -5,7 +5,7 @@ import common._
 import util._
 import Helpers._
 import xml.{UnprefixedAttribute, PrefixedAttribute, Elem, NodeSeq}
-import java.io.FileInputStream
+import java.io.{PrintWriter, File, OutputStream, FileInputStream}
 import org.joda.time.{DateTimeZone, DateTime}
 import org.joda.time.format.{DateTimeFormatter, ISODateTimeFormat, DateTimeFormat}
 
@@ -72,7 +72,8 @@ object ParsedFile {
     fi.suffix.map(_.toLowerCase) match {
       case Some("xml") | Some("cms.xml") =>
         for {
-          fis <- tryo(new FileInputStream(fi.file))
+          realFile <- fi.file
+          fis <- tryo(new FileInputStream(realFile))
           xml <- PCDataXmlParser(fis)
           _ <- tryo(fis.close())
           metaData = findXmlMetaData(xml)
@@ -81,7 +82,8 @@ object ParsedFile {
 
       case Some("html") | Some("htm") =>
         for {
-          fis <- tryo(new FileInputStream(fi.file))
+          realFile <- fi.file
+          fis <- tryo(new FileInputStream(realFile))
           bytes <- tryo(Helpers.readWholeStream(fis))
           str = new String(bytes, "UTF-8")
           (str2, info) = MarkdownParser.readTopMetadata(str)
@@ -94,7 +96,8 @@ object ParsedFile {
 
       case Some("md") =>
         for {
-          whole <- tryo(Helpers.readWholeFile(fi.file))
+          realFile <- fi.file
+          whole <- tryo(Helpers.readWholeFile(realFile))
           str = new String(whole, "UTF-8")
           (elems, rawMeta) <- MarkdownParser.parse(str)
         } yield MarkdownFile(fi, elems,
@@ -168,10 +171,33 @@ sealed trait ParsedFile {
   def findData(in: MetadataKey): Box[MetadataValue] = Empty
 
   def uniqueId: String
+
+  def writeTo(out: OutputStream): Unit
 }
 
-sealed trait HasHtml {
+sealed trait HasHtml extends ParsedFile {
   def html: NodeSeq
+
+  def writeTo(out: OutputStream): Unit = {
+   if (HoistedEnvironmentManager.value.isHtml(this))  {
+        val or = new PrintWriter(out)
+        or.write("<!DOCTYPE html>\n")
+        try {
+          Html5.write(this.html.collect {
+            case e: Elem => e
+          }.headOption getOrElse <html/>, or, false, true)
+        } finally {
+          or.close()
+        }
+  } else {
+     val or = new PrintWriter(out)
+        try {
+          or.write(this.html.text)
+        } finally {
+          or.close()
+        }
+      }
+  }
 }
 
 trait MetadataBuilder[T] {
@@ -190,12 +216,21 @@ object MetadataBuilder {
 }
 
 
-sealed trait HasMetaData {
-  self: ParsedFile =>
+sealed trait HasMetaData extends ParsedFile {
   def metaData: MetadataMeta.Metadata
 
   override def findData(in: MetadataKey): Box[MetadataValue] = metaData.get(in)
 
+}
+
+final case class SyntheticFile(computeFileInfo: () => FileInfo,
+                               computeMetaData: () => MetadataMeta.Metadata,
+                               writer: OutputStream => Unit,
+                               uniqueId: String = Helpers.nextFuncName) extends ParsedFile with HasMetaData {
+  lazy val fileInfo = computeFileInfo()
+  def writeTo(out: OutputStream): Unit = writer(out)
+
+  lazy val metaData: MetadataMeta.Metadata = computeMetaData()
 }
 
 final case class XmlFile(fileInfo: FileInfo,
@@ -215,6 +250,39 @@ final case class MarkdownFile(fileInfo: FileInfo,
                               uniqueId: String = Helpers.nextFuncName) extends ParsedFile with HasHtml with HasMetaData
 
 final case class OtherFile(fileInfo: FileInfo,
-                           uniqueId: String = Helpers.nextFuncName) extends ParsedFile
+                           uniqueId: String = Helpers.nextFuncName) extends ParsedFile {
+
+  def writeTo(out: OutputStream) {
+    val bufLen = 4096
+    val buffer = new Array[Byte](bufLen)
+
+    def copy(from: File) {
+      val in = new FileInputStream(from)
+      try {
+
+        try {
+          var len = 0
+          while ( {
+            len = in.read(buffer, 0, bufLen);
+            len >= 0
+          }) {
+            if (len > 0) out.write(buffer, 0, len)
+          }
+        } finally {
+          out.close()
+        }
+      } finally {
+        in.close()
+      }
+    }
+
+    fileInfo.file.foreach(copy(_))
+  }
+}
+
+final case class FileInfo(file: Box[File], relPath: String, name: String, pureName: String, suffix: Option[String]) {
+  lazy val pathAndSuffix: PathAndSuffix =
+    PathAndSuffix(relPath.toLowerCase.roboSplit("/").dropRight(1) ::: List(name.toLowerCase), suffix.map(_.toLowerCase))
+}
 
 

@@ -10,7 +10,7 @@ import Helpers._
 import MetadataMeta._
 import org.joda.time.DateTime
 import org.eclipse.jgit.api.Git
-import java.io.File
+import java.io.{PrintWriter, OutputStream, File}
 import xml.{Node, NodeSeq}
 
 /**
@@ -137,7 +137,7 @@ trait EnvironmentManager {
 
 
   def computeMenuItems: List[ParsedFile] => List[MenuEntry] = pf =>
-    pf.filter(shouldWriteHtmlFile).filter(isHtmlFile).filter(a => !isBlogPost(a)).
+    pf.filter(shouldWriteFile).filter(isHtmlFile).filter(a => !isBlogPost(a)).
       filter(a => !isEvent(a)).map(pf => MenuEntry(pf, Nil)).
       sortWith(compareMenuEntries)
 
@@ -152,7 +152,7 @@ trait EnvironmentManager {
   }
 
   @scala.annotation.tailrec
-  final def makeShortHtml(in: List[Node], changed: Boolean): (NodeSeq, Boolean) = {
+  final def makeShortHtml(in: List[Node], changed: Boolean = false): (NodeSeq, Boolean) = {
     if (in.length == 1) (in, changed) else {
     val ns: NodeSeq = in
     val tl = ns.text.length
@@ -194,15 +194,15 @@ trait EnvironmentManager {
 
   def isEvent: ParsedFile => Boolean = _.findData(EventKey).flatMap(_.asBoolean) openOr false
 
-  def computeDate: ParsedFile => DateTime = pf => pf.findData(DateKey).flatMap(_.asDate) openOr
-    new DateTime(pf.fileInfo.file.lastModified())
+  def computeDate: ParsedFile => DateTime = pf => pf.findData(DateKey).flatMap(_.asDate) or
+    (pf.fileInfo.file.map(ff => new DateTime(ff.lastModified()))) openOr new DateTime()
 
   def isHtmlFile: ParsedFile => Boolean = {
     case x: HasHtml => true
     case _ => false
   }
 
-  def shouldWriteHtmlFile: ParsedFile => Boolean =
+  def shouldWriteFile: ParsedFile => Boolean =
     pf => {
       pf.findData(ServeKey).flatMap(_.asBoolean) openOr (pf.pathAndSuffix.path match {
         case "templates-hidden" :: _ => false
@@ -311,7 +311,7 @@ trait EnvironmentManager {
    */
   def collectRendered: List[ParsedFile] => List[ParsedFile with HasHtml] =
     in => in.collect {
-      case x: ParsedFile with HasHtml with HasMetaData if shouldWriteHtmlFile(x) => x
+      case x: ParsedFile with HasHtml with HasMetaData if shouldWriteFile(x) => x
     }
 
   def updateMetadata: (MetadataMeta.Metadata, FileInfo) => MetadataMeta.Metadata =
@@ -356,7 +356,7 @@ trait EnvironmentManager {
               case Full(date) => fixedMd = set(fixedMd, DateKey, date)
                 val rx = """^([0-9]{2,4}-[0-9]{1,2}-[0-9]{1,2})-+(.*)""".r
                 rx.findFirstMatchIn(fi.name).foreach(m => pathling = m.group(2))
-              case _ => fixedMd = set(fixedMd, DateKey, new DateTime(fi.file.lastModified()))
+              case _ => fixedMd = set(fixedMd, DateKey, fi.file.map(ff => new DateTime(ff.lastModified())).getOrElse(new DateTime()))
             }
         }
       }
@@ -387,7 +387,7 @@ trait EnvironmentManager {
 
     multiSlash.replaceAllIn((m.findData(PostKey).flatMap(_.asBoolean).filter(a => a).map(a => computeBlogRoot()) openOr  "") + ret, "/")
     } else {
-        m.findData(OutputPathKey).flatMap(_.asString) openOr m.pathAndSuffix.path.mkString("/", "/", "")
+        m.findData(OutputPathKey).flatMap(_.asString) openOr m.pathAndSuffix.path.mkString("/", "/", m.pathAndSuffix.suffix.map(s => "."+s).getOrElse(""))
     }
   }
 
@@ -410,12 +410,68 @@ trait EnvironmentManager {
     }
   }
 
+  def syntheticFiles: () => Seq[ParsedFile] = () => {
+    val bpSynt: List[ParsedFile] = blogPosts.filter(isValid).sortWith{
+      case (a, b) =>
+        val d1 = computeDate(a)
+        val d2 = computeDate(b)
+        d1.getMillis > d2.getMillis
+    } match {
+      case Nil => Nil
+      case bp =>
+        postMergeTransforms = ("head *+" #> <link rel="alternate" type="application/rss+xml" href="/rss.xml"/>) :: postMergeTransforms
+
+
+        List(SyntheticFile(() => FileInfo(Empty, "/", "rss", "rss.xml", Some("xml")),
+          () => Map(DateKey -> DateTimeMetadataValue(new DateTime())),
+          out => {
+            val pw = new PrintWriter(out)
+            pw.println("<?xml version=\"1.0\" encoding=\"UTF-8\"?>")
+            val xml =
+              <feed xmlns="http://www.w3.org/2005/Atom">
+
+            <title type="text">Example Feed</title>
+                <link href="http://example.org/"/>
+              <updated>2003-12-13T18:30:02Z</updated>
+              <author>
+                <name>John Doe</name>
+              </author>
+              <id>urn:uuid:60a76c80-d399-11d9-b93C-0003939e0af6</id>
+
+                {
+                bp.collect{case hh: HasHtml => hh}.take(10).map(post =>
+              <entry>
+                <title type="text">Atom-Powered Robots Run Amok</title>
+                  <link href="http://example.org/2003/12/13/atom03"/>
+                <id>urn:uuid:1225c695-cfb8-4ebb-aaaa-80da344efa6a</id>
+                <updated>2003-12-13T18:30:02Z</updated>
+                <summary>{makeShortHtml(post.html.toList)._1}</summary>
+              </entry>)
+                }
+            </feed>
+
+            pw.print(xml.toString)
+            pw.flush()
+            pw.close()
+          }))
+    }
+
+    bpSynt ::: Nil
+  }
+
+  var globalTransforms: List[NodeSeq => NodeSeq] = Nil
+
+  def computeTransforms: ParsedFile => Seq[NodeSeq => NodeSeq] = pf => globalTransforms
+
+  var postMergeTransforms: List[NodeSeq => NodeSeq] = Nil
+
+  def computePostMergeTransforms: ParsedFile => Seq[NodeSeq => NodeSeq] = pf => postMergeTransforms
 
   def isValid: ParsedFile => Boolean = pf => {
     def computeValidFrom: Boolean =
-      pf.findData(ValidFromKey).flatMap(_.asDate).map(_.getMillis < Helpers.millis) openOr
-        (pf.findData(DateKey).flatMap(_.asDate).map(_.getMillis < Helpers.millis) openOr
-          pf.fileInfo.file.lastModified() < Helpers.millis)
+      pf.findData(ValidFromKey).flatMap(_.asDate).map(_.getMillis < Helpers.millis) or
+        pf.findData(DateKey).flatMap(_.asDate).map(_.getMillis < Helpers.millis) or
+          pf.fileInfo.file.map(_.lastModified() < Helpers.millis) openOr false
 
     pf.findData(ValidToKey).flatMap(_.asDate).map(_.getMillis > Helpers.millis) match {
       case Full(true) => computeValidFrom

@@ -57,7 +57,7 @@ trait HoistedRenderer {
         posts = HoistedEnvironmentManager.value.computePosts(parsedFiles)
         _ = HoistedEnvironmentManager.value.blogPosts = posts
 
-        transformedFiles = parsedFiles.map(f => runTemplater(f, templates))
+        transformedFiles = env.syntheticFiles() ++ parsedFiles.map(f => runTemplater(f, templates))
 
         done <- tryo(writeFiles(transformedFiles, inDir, outDir))
       } yield HoistedTransformMetaData()
@@ -90,82 +90,30 @@ trait HoistedRenderer {
 
 
   def writeFiles(toWrite: Seq[ParsedFile], inDir: File, outDir: File): Unit = {
-    val bufLen = 4096
-    val buffer = new Array[Byte](bufLen)
-
     def translate(source: String): File = {
       new File(outDir.getAbsolutePath + source)
     }
 
-    def outputFile(m: ParsedFile): String = HoistedEnvironmentManager.value.computeOutputFileName(m)
-
-
-    def calcFile(pf: ParsedFile with HasMetaData): File = translate(pf match {
-      case XmlFile(f, _, _, _, _) => outputFile(pf)
-      case HtmlFile(f, _, _, _) => outputFile(pf)
-      case MarkdownFile(f, _, _, _) => outputFile(pf)
-      case f => f.fileInfo.relPath
-    })
-
-    def copy(from: File, to: File) {
-      val in = new FileInputStream(from)
-      try {
-        to.getParentFile().mkdirs()
-        val out = new FileOutputStream(to)
-        try {
-          var len = 0
-          while ( {
-            len = in.read(buffer, 0, bufLen);
-            len >= 0
-          }) {
-            if (len > 0) out.write(buffer, 0, len)
-          }
-        } finally {
-          out.close()
-        }
-      } finally {
-        in.close()
-      }
+    def calcFile(pf: ParsedFile): File = {
+      val ret = translate(env.computeOutputFileName(pf))
+      ret
     }
 
     toWrite.foreach {
-      case pf: ParsedFile with HasHtml with HasMetaData if HoistedEnvironmentManager.value.isHtml(pf) => if (shouldEmitFile(pf)) {
-        val where = calcFile(pf)
-        where.getParentFile.mkdirs()
-        val out = new FileWriter(where)
-        out.write("<!DOCTYPE html>\n")
-        try {
-          Html5.write(pf.html.collect {
-            case e: Elem => e
-          }.headOption getOrElse <html/>, out, false, true)
-        } finally {
-          out.close()
+      pf =>
+        if (env.shouldWriteFile(pf)) {
+        val where: File = calcFile(pf)
+          where.getParentFile.mkdirs()
+          val out = new FileOutputStream(where)
+          try {
+            pf.writeTo(out)
+          } finally {
+            out.close()
+          }
+          where.setLastModified(env.computeDate(pf).getMillis)
         }
-        where.setLastModified(HoistedEnvironmentManager.value.computeDate(pf).getMillis)
-      }
-
-      case pf: ParsedFile with HasHtml with HasMetaData => if (shouldEmitFile(pf)) {
-        val where = calcFile(pf)
-        where.getParentFile.mkdirs()
-        val out = new FileWriter(where)
-
-        try {
-          out.write(pf.html.text)
-        } finally {
-          out.close()
-        }
-        where.setLastModified(HoistedEnvironmentManager.value.computeDate(pf).getMillis)
-      }
-
-      case f if (shouldEmitFile(f)) =>
-        val where = translate(f.fileInfo.relPath)
-        copy(f.fileInfo.file, where)
-        where.setLastModified(HoistedEnvironmentManager.value.computeDate(f).getMillis)
-      case x =>
     }
   }
-
-  def shouldEmitFile(pf: ParsedFile): Boolean = HoistedEnvironmentManager.value.shouldWriteHtmlFile(pf)
 
   type TemplateLookup = PartialFunction[(List[String], String), ParsedFile]
 
@@ -251,9 +199,11 @@ trait HoistedRenderer {
         res
       }
 
-      val processed = PostPageTransforms.get.foldLeft(_processed)((ns, f) => f(ns))
+      val _processed1 = PostPageTransforms.get.foldLeft(_processed)((ns, f) => f(ns))
+      val processed = env.computeTransforms(todo).foldLeft(_processed1)((ns, f) => f(ns))
 
-      session.merge(processed, Req.nil)
+      env.computePostMergeTransforms(todo).foldLeft[NodeSeq](session.merge(processed, Req.nil))((ns, f) => f(ns))
+
     }
 
     S.initIfUninitted(session) {
@@ -294,7 +244,7 @@ trait HoistedRenderer {
       (pureName.substring(0, pureName.length - 8), Some("cms.xml"))
     else (pureName.substring(0, dp),
       Some(pureName.substring(dp + 1)))
-    FileInfo(f, cp, name, pureName, suf)
+    FileInfo(Full(f), cp, name, pureName, suf)
   }
 
   def byName(in: Seq[ParsedFile]): Map[String, List[ParsedFile]] = {
@@ -335,8 +285,4 @@ trait HoistedRenderer {
 
 final case class HoistedTransformMetaData()
 
-final case class FileInfo(file: File, relPath: String, name: String, pureName: String, suffix: Option[String]) {
-  lazy val pathAndSuffix: PathAndSuffix =
-    PathAndSuffix(relPath.toLowerCase.roboSplit("/").dropRight(1) ::: List(name.toLowerCase), suffix.map(_.toLowerCase))
-}
 
