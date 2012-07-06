@@ -26,11 +26,13 @@ object MetadataMeta {
   def find(key: MetadataKey, md: Metadata): Box[MetadataValue] = md.get(key)
 
   def set[T](md: Metadata, key: MetadataKey, value: T)(implicit f: T => MetadataValue): Metadata =
-    md + (key -> (md.getOrElse(key, NullMetadataValue) ++ value))
+    md + (key -> (md.getOrElse(key, NullMetadataValue).append(value, key)))
 }
 
 trait MetadataKey {
   def global: Boolean
+
+  def prepend: Boolean = false
 
   def key: String
 }
@@ -74,6 +76,8 @@ case object ValidToKey extends MetadataKey {
 case object TitleKey extends MetadataKey {
   def global = false
 
+  override def prepend = true
+
   def key = "title"
 }
 
@@ -81,6 +85,14 @@ case object LinkKey extends MetadataKey {
   def global = false
 
   def key = "menu"
+}
+
+case object SiteLinkKey extends MetadataKey {
+  def global = true
+
+  override def prepend = true
+
+  def key = "site_link"
 }
 
 case object OrderKey extends MetadataKey {
@@ -156,16 +168,39 @@ case object TagsKey extends MetadataKey {
   def key = "tag"
 }
 
+case object SiteAuthorKey  extends MetadataKey {
+  def global = true
+
+  def key = "site_author"
+}
+
+case object AuthorKey  extends MetadataKey {
+  def global = false
+
+  def key = "author"
+}
+
+case object RedirectKey extends MetadataKey {
+  def global = false
+  def key = "redirect"
+}
+
+case object NoSyntheticRssFile extends MetadataKey {
+  def global = true
+  def key = "no_synthetic_rss_file"
+}
+
+
 object MetadataKey {
   lazy val knownKeys = List(OrderKey, OutputPathKey, TemplateURLKey, SiteNameKey, LinkKey,
     TitleKey, TemplateKey, ServeKey,
-    BlogRootKey, TypeKey,
-    DateKey,
-    CategoryKey,
+    BlogRootKey, TypeKey, SiteAuthorKey, AuthorKey,
+    DateKey, SiteLinkKey,
+    CategoryKey, NoSyntheticRssFile,
     HasBlogKey, TagsKey,
-    ValidFromKey, ValidToKey, EventKey, PostKey, LayoutKey)
+    ValidFromKey, ValidToKey, EventKey, PostKey, LayoutKey, RedirectKey)
 
-  implicit def strToKey(in: String): MetadataKey = this.apply(in)
+  // implicit def strToKey(in: String): MetadataKey = this.apply(in)
 
   def apply(s: String): MetadataKey = {
     val (_s, top) = if (s.startsWith("!")) (s.substring(1), true) else (s, false)

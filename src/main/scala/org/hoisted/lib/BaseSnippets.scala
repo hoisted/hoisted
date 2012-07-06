@@ -10,6 +10,10 @@ import http.js._
 import JsCmds._
 import builtin.snippet._
 import org.joda.time.format.{DateTimeFormat}
+import actors.remote.Node
+import collection.mutable.ListBuffer
+import scala.xml
+import scala.xml
 
 /**
  * Created with IntelliJ IDEA.
@@ -20,6 +24,43 @@ import org.joda.time.format.{DateTimeFormat}
  */
 
 object BaseSnippets {
+  /*
+  sortWith{
+    case (a, b) =>
+      val d1 = env.computeDate(a)
+      val d2 = env.computeDate(b)
+      d1.getMillis > d2.getMillis
+  }.collect{case hh: HasHtml => hh}.
+   */
+
+  lazy val months = Array("January", "February", "March", "April",
+  "May", "June", "July", "August", "September", "October",
+  "November", "December")
+
+  def archivedPosts: NodeSeq => NodeSeq = {
+    val e2 = env
+    val byYear = e2.blogPosts.filter(e2.isValid).groupBy(a => e2.computeDate(a).getYear)
+
+    ClearClearable andThen "@year-block" #> byYear.keys.
+      toList.sortWith(_ > _).
+      map(year => "@year *" #> year & "@month-block" #> {
+      val byMonth = byYear(year).groupBy(a => e2.computeDate(a).getMonthOfYear)
+      byMonth.keys.toList.sortWith(_ > _).
+      map(month => "@month *" #> months(month - 1) & "@post-block" #> {
+        val posts = byMonth(month).sortWith{
+          case (a, b) =>
+            val d1 = env.computeDate(a)
+            val d2 = env.computeDate(b)
+            d1.getMillis > d2.getMillis
+        }
+
+        posts.map(post =>
+        "@post-date *" #> DateTimeFormat.longDate().print(e2.computeDate(post)) &
+        "@post-title *" #> e2.computeTitle(post) & "@post-title [href]" #> e2.computeLink(post))
+      })
+    })
+  }
+
   def env = HoistedEnvironmentManager.value
 
   def doA: NodeSeq => NodeSeq = ns => {
@@ -84,16 +125,61 @@ object BaseSnippets {
       info.flatMap{ case (rec, title, desc) =>
         Helpers.bind("sub", in,
           "title" -> title, "desc" -> desc,
-          AttrBindParam("href", Text(rec.findData("redirect").flatMap(_.asString) openOr env.computeLink(rec)), "href"))
+          AttrBindParam("href", Text(rec.findData(RedirectKey).flatMap(_.asString) openOr env.computeLink(rec)), "href"))
       }
     } else {
       ("*" #> info.map{
         case (rec, title, desc) => "@title *" #> title &
           "@desc *" #> desc &
-          "a [href]" #> (rec.findData("redirect").flatMap(_.asString) openOr env.computeLink(rec))
+          "a [href]" #> (rec.findData(RedirectKey).flatMap(_.asString) openOr env.computeLink(rec))
       }).apply(in)
     }
   }
+
+  def search: NodeSeq => NodeSeq = ns => {
+    val it: Elem= ns.toList.collect{case e: Elem => e}.headOption.getOrElse(<div/>)
+
+    <form action="https://www.google.com/search">
+      <input name="q"></input> <input type="hidden" name="as_sitesearch" value={env.siteLink()}></input>
+      <input type="submit" value={S.?("Search")}/>
+    </form> % it.attributes
+  }
+
+  def doTwitter: NodeSeq => NodeSeq = ns => {
+    val user = S.attr("user") openOr "_telegram"
+    Unparsed(
+    """<script charset="utf-8" src="https://widgets.twimg.com/j/2/widget.js"></script>
+      <script>
+      // <![CDATA[
+      new TWTR.Widget({
+        version: 2,
+        type: 'profile',
+        rpp: """+S.attr("rpp").flatMap(Helpers.asInt).openOr(4)+""",
+        interval: """+S.attr("interval").flatMap(Helpers.asInt).openOr(30000)+""",
+        width: 'auto',
+        height: """+S.attr("height").flatMap(Helpers.asInt).openOr(300)+""",
+        theme: {
+          shell: {
+            background: """+S.attr("shell-background").openOr("#bfbfbf").encJs+""",
+            color: """+S.attr("shell-color").openOr("#000000").encJs+"""
+          },
+          tweets: {
+            background: """+S.attr("tweets-background").openOr("#ffffff").encJs+""",
+            color: """+S.attr("tweets-color").openOr("#000000").encJs+""",
+            links: """+S.attr("tweets-links").openOr("#292382").encJs+"""
+          }
+        },
+        features: {
+          scrollbar: true,
+          loop: false,
+          live: true,
+          behavior: 'all'
+        }
+      }).render().setUser("""+user.encJs+""").start();
+      // ]]>
+      </script>"""
+
+  )}
 
   def doChoose(in: NodeSeq): NodeSeq = {
     val num = S.attr("cnt").flatMap(Helpers.asInt) openOr 1
@@ -143,10 +229,58 @@ object BaseSnippets {
         """) )
   }
 
+  def moveTop: NodeSeq => NodeSeq = in => {
+    val xf: Box[NodeSeq => NodeSeq] = for {
+      from <- S.attr("from")
+      to <- S.attr("to")
+    } yield {
+
+      var foundFrom: Box[NodeSeq] = Empty
+      var elemCnt = 0;
+      var removePageHeader = false
+      var otherNodes: ListBuffer[xml.Node] = new ListBuffer[xml.Node]()
+      (("#"+from+" *") #> ((ns: NodeSeq) => {
+        ns.toList.foreach {
+          case e: Elem => if (elemCnt == 0 && ((e.label.toLowerCase match {
+            case "h1" | "h2" | "h3" | "h4" | "h5" | "h6" => true
+            case _ => false
+          }) || (e.attribute("class").map{s =>
+            val s2 = s.text.toLowerCase
+            s2.contains("hero-unit") || s2.contains("page-header")
+          } getOrElse false))) {
+            removePageHeader = e.attribute("class").map{s =>
+              val s2 = s.text.toLowerCase
+              s2.contains("hero-unit") || s2.contains("page-header")
+            } getOrElse false
+
+            foundFrom = Full(e)
+          } else {
+            otherNodes.append(e)
+          }
+            elemCnt += 1
+          case other => otherNodes.append(other)
+        }
+        ns
+      })).apply(in)
+
+      if (foundFrom.isDefined) {
+        val q = ("#"+to+" *") #> foundFrom & ("#"+from+" *") #> (otherNodes.toList: NodeSeq)
+
+        if (removePageHeader) {
+          q & ("#"+to+" [class]") #> (None: Option[String])
+        } else q
+      } else {
+        ("#"+to) #> foundFrom
+      }
+    }
+
+    xf.map(_.apply(in)) openOr in
+  }
+
   def pageInfo: NodeSeq => NodeSeq = ns => {
     val name = S.attr("name") or S.attr("info")
 
-    val data: Box[NodeSeq] = name.flatMap(CurrentFile.value.findData(_)).flatMap(data =>
+    val data: Box[NodeSeq] = name.map(MetadataKey(_)).flatMap(CurrentFile.value.findData(_)).flatMap(data =>
       data.asListString.map(a => Text(a.mkString(", ")): NodeSeq) or
         data.asNodeSeq or data.asString.map(a => Text(a): NodeSeq) or
         data.asDate.map(d => Text(DateTimeFormat.longDate().print(d)): NodeSeq))
@@ -185,6 +319,7 @@ object BaseSnippets {
       node <- in
     } yield node
   }
+
 
   def xform: NodeSeq => NodeSeq = ns => {
     for {

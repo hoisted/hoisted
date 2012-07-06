@@ -12,6 +12,7 @@ import org.joda.time.DateTime
 import org.eclipse.jgit.api.Git
 import java.io.{PrintWriter, OutputStream, File}
 import xml.{Node, NodeSeq}
+import org.joda.time.format.ISODateTimeFormat
 
 /**
  * Created with IntelliJ IDEA.
@@ -90,12 +91,16 @@ trait EnvironmentManager {
       ("title", "render") -> Full(BaseSnippets.doTitle _),
       ("withparam", "render") -> Full(WithParam.render _),
       ("embed", "render") -> Full(Embed.render _),
+      ("archived_posts", "render") -> Full(BaseSnippets.archivedPosts),
       ("if", "render") -> Full(BaseSnippets.testAttr _),
       ("xform", "render") -> Full(BaseSnippets.xform),
       ("page-info", "render") -> Full(BaseSnippets.pageInfo),
       ("page_info", "render") -> Full(BaseSnippets.pageInfo),
       ("pageinfo", "render") -> Full(BaseSnippets.pageInfo),
       ("blog", "posts") -> Full(BaseSnippets.blogPosts),
+      ("move_top", "render") -> Full(BaseSnippets.moveTop),
+      ("twitter", "render") -> Full(BaseSnippets.doTwitter),
+      ("search", "render") -> Full(BaseSnippets.search),
       ("bootstraputil", "headcomment") -> Full((ignore: NodeSeq) => BootstrapUtil.headComment),
       ("bootstraputil", "bodycomment") -> Full((ignore: NodeSeq) => BootstrapUtil.bodyComment)
     ).withDefaultValue(Empty)
@@ -392,7 +397,7 @@ trait EnvironmentManager {
   }
 
   def computeLink: ParsedFile => String = pf =>
-    pf.findData("redirect").flatMap(_.asString) openOr
+    pf.findData(RedirectKey).flatMap(_.asString) openOr
     striptHtmlSuffix(computeOutputFileName(pf)) match {
     case s if s.endsWith("/index") => s.dropRight(5)
     case s => s
@@ -410,17 +415,22 @@ trait EnvironmentManager {
     }
   }
 
+  def w3cFormattedDate: ParsedFile => String = pf => ParsedFile.w3cDateTimeFormat.print(computeDate(pf))
+
   def syntheticFiles: () => Seq[ParsedFile] = () => {
-    val bpSynt: List[ParsedFile] = blogPosts.filter(isValid).sortWith{
+    val bpSynt: List[ParsedFile] =
+     if (!(findMetadata(NoSyntheticRssFile).flatMap(_.asBoolean) openOr false)) {
+      blogPosts.filter(isValid).sortWith{
       case (a, b) =>
         val d1 = computeDate(a)
         val d2 = computeDate(b)
         d1.getMillis > d2.getMillis
-    } match {
+    }.collect{case hh: HasHtml => hh}.take(10) match {
       case Nil => Nil
       case bp =>
         postMergeTransforms = ("head *+" #> <link rel="alternate" type="application/rss+xml" href="/rss.xml"/>) :: postMergeTransforms
 
+        val toShow = bp
 
         List(SyntheticFile(() => FileInfo(Empty, "/", "rss", "rss.xml", Some("xml")),
           () => Map(DateKey -> DateTimeMetadataValue(new DateTime())),
@@ -430,34 +440,75 @@ trait EnvironmentManager {
             val xml =
               <feed xmlns="http://www.w3.org/2005/Atom">
 
-            <title type="text">Example Feed</title>
-                <link href="http://example.org/"/>
-              <updated>2003-12-13T18:30:02Z</updated>
-              <author>
-                <name>John Doe</name>
-              </author>
-              <id>urn:uuid:60a76c80-d399-11d9-b93C-0003939e0af6</id>
+                <title type="text">
+                  {siteTitle()}
+                </title>
+                  <link href={siteLink()}/>
+                <updated>
+                  {w3cFormattedDate(toShow.head)}
+                </updated>
+                <author>
+                  {
+                  val names: List[String] = (toShow.flatMap(_.findData(AuthorKey).toList).flatMap(_.asString) :::
+                    findMetadata(SiteAuthorKey).toList.flatMap(_.asString.toList))
 
-                {
-                bp.collect{case hh: HasHtml => hh}.take(10).map(post =>
-              <entry>
-                <title type="text">Atom-Powered Robots Run Amok</title>
-                  <link href="http://example.org/2003/12/13/atom03"/>
-                <id>urn:uuid:1225c695-cfb8-4ebb-aaaa-80da344efa6a</id>
-                <updated>2003-12-13T18:30:02Z</updated>
-                <summary>{makeShortHtml(post.html.toList)._1}</summary>
-              </entry>)
+                  val ret = names.flatMap {
+                  a =>
+                    <name>
+                      {a}
+                    </name>
                 }
-            </feed>
+                  ret
+                  }
+                </author>
+                <id>
+                  {siteGuid()}
+                </id>{toShow.map(post =>
+                <entry>
+                  <title type="text">
+                    {computeTitle(post)}
+                  </title>
+                    <link href={siteLink() + computeLink(post)}/>
+                  <id>
+                    {computeGuid(post)}
+                  </id>
+                  <author>
+                    {(post.findData(AuthorKey).flatMap(_.asString) or
+                    findMetadata(SiteAuthorKey).flatMap(_.asString)).toList.flatMap(
+                    a => <name>
+                      {a}
+                    </name>
+                  )}
+                  </author>
+                  <updated>
+                    {w3cFormattedDate(post)}
+                  </updated>
+                  <summary type="html">
+                    {makeShortHtml(post.html.toList) match {
+                    case (ns, false) => ns
+                    case (ns, _) => ns.dropRight(1)
+                  }
+                    }
+                  </summary>
+                </entry>)}
+              </feed>
 
             pw.print(xml.toString)
             pw.flush()
             pw.close()
           }))
-    }
+    }} else Nil
 
     bpSynt ::: Nil
   }
+
+  def computeGuid: ParsedFile => String = pf => siteGuid() +":"+Helpers.hashHex(computeLink(pf))
+
+  def siteGuid: () => String = () => Helpers.hashHex(siteLink())
+
+  def siteLink: () => String = () => findMetadata(SiteLinkKey).flatMap(_.asString) openOr "http://telegr.am"
+
+  def siteTitle: () => String = () => findMetadata(SiteNameKey).flatMap(_.asString) openOr "Telegram"
 
   var globalTransforms: List[NodeSeq => NodeSeq] = Nil
 

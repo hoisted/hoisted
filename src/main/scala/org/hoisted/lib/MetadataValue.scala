@@ -37,7 +37,11 @@ object MetadataValue {
 }
 
 trait MetadataValue {
-  def ++(other: MetadataValue): MetadataValue
+  def append(other: MetadataValue, key: MetadataKey): MetadataValue = other match {
+    case ListMetadataValue(lst) =>
+      if (key.prepend) ListMetadataValue(lst ::: List(this)) else ListMetadataValue(this :: lst)
+    case x => if (key.prepend) ListMetadataValue(other :: this :: Nil) else ListMetadataValue(this :: other :: Nil)
+  }
 
   def asString: Box[String]
 
@@ -53,7 +57,7 @@ trait MetadataValue {
 }
 
 case object NullMetadataValue extends MetadataValue {
-  def ++(other: MetadataValue): MetadataValue = other
+  override def append(other: MetadataValue, key: MetadataKey): MetadataValue = other
   def asString: Box[String] = Empty
   def asBoolean: Box[Boolean] = Empty
   def asDate: Box[DateTime] = Empty
@@ -61,10 +65,6 @@ case object NullMetadataValue extends MetadataValue {
 }
 
 final case class StringMetadataValue(s: String) extends MetadataValue  {
-  def ++(other: MetadataValue): MetadataValue = other match {
-    case ListMetadataValue(lst) => ListMetadataValue(this :: lst)
-    case x => ListMetadataValue(this :: other :: Nil)
-  }
   def asString: Box[String] = Full(s)
   lazy val asBoolean: Box[Boolean] = Helpers.asBoolean(s)
   lazy val asDate: Box[DateTime] = ParsedFile.parseDate(s.trim)
@@ -73,9 +73,9 @@ final case class StringMetadataValue(s: String) extends MetadataValue  {
 }
 
 final case class ListMetadataValue(lst: List[MetadataValue]) extends MetadataValue {
-  def ++(other: MetadataValue): MetadataValue = other  match {
-    case ListMetadataValue(l2) => ListMetadataValue(this.lst ::: l2)
-    case x => ListMetadataValue(lst ::: List(other))
+  override def append(other: MetadataValue, key: MetadataKey): MetadataValue = other  match {
+    case ListMetadataValue(l2) => if (key.prepend)  ListMetadataValue(l2 ::: this.lst) else ListMetadataValue(this.lst ::: l2)
+    case x => if (key.prepend) ListMetadataValue(List(other) ::: lst) else ListMetadataValue(lst ::: List(other))
   }
 
   override lazy val asListString: Box[List[String]] = Full(lst.flatMap{
@@ -91,10 +91,6 @@ final case class ListMetadataValue(lst: List[MetadataValue]) extends MetadataVal
 }
 
 final case class BooleanMetadataValue(b: Boolean) extends MetadataValue  {
-  def ++(other: MetadataValue): MetadataValue = other match {
-    case ListMetadataValue(lst) => ListMetadataValue(this :: lst)
-    case x => ListMetadataValue(this :: other :: Nil)
-  }
 
   def asString: Box[String] = Empty
   def asBoolean: Box[Boolean] = Full(b)
@@ -103,10 +99,6 @@ final case class BooleanMetadataValue(b: Boolean) extends MetadataValue  {
 }
 
 final case class DateTimeMetadataValue(date: DateTime) extends MetadataValue  {
-  def ++(other: MetadataValue): MetadataValue = other  match {
-    case ListMetadataValue(lst) => ListMetadataValue(this :: lst)
-    case x => ListMetadataValue(this :: other :: Nil)
-  }
 
   def asString: Box[String] = Empty
   def asBoolean: Box[Boolean] = Empty
@@ -115,11 +107,6 @@ final case class DateTimeMetadataValue(date: DateTime) extends MetadataValue  {
 }
 
 final case class NodeSeqMetadataValue(ns: NodeSeq) extends MetadataValue  {
-  def ++(other: MetadataValue): MetadataValue = other  match {
-    case ListMetadataValue(lst) => ListMetadataValue(this :: lst)
-    case x => ListMetadataValue(this :: other :: Nil)
-  }
-
   def asString: Box[String] = Full(ns.text)
   def asBoolean: Box[Boolean] = Empty
   def asDate: Box[DateTime] = Empty

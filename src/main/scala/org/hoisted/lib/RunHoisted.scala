@@ -13,7 +13,7 @@ import org.joda.time.format.DateTimeFormat
 
 
 object VeryTesty {
-  def apply() = RunHoisted(new File("/Users/dpp/tmp/cms_site/site/"), new File("/Users/dpp/tmp/outfrog"))
+  def apply() = RunHoisted(new File("/tmp/telegram889598712388137454"), new File("/tmp/outfrog"))
 }
 
 /**
@@ -108,9 +108,10 @@ trait HoistedRenderer {
           try {
             pf.writeTo(out)
           } finally {
-            out.close()
+            tryo(out.flush())
+            tryo(out.close())
           }
-          where.setLastModified(env.computeDate(pf).getMillis)
+          // where.setLastModified(env.computeDate(pf).getMillis)
         }
     }
   }
@@ -200,9 +201,10 @@ trait HoistedRenderer {
       }
 
       val _processed1 = PostPageTransforms.get.foldLeft(_processed)((ns, f) => f(ns))
-      val processed = env.computeTransforms(todo).foldLeft(_processed1)((ns, f) => f(ns))
+      val processed =  session.processSurroundAndInclude("Post transforms",env.computeTransforms(todo).foldLeft(_processed1)((ns, f) => f(ns)))
 
-      env.computePostMergeTransforms(todo).foldLeft[NodeSeq](session.merge(processed, Req.nil))((ns, f) => f(ns))
+      session.processSurroundAndInclude("Post merge transforms",
+      env.computePostMergeTransforms(todo).foldLeft[NodeSeq](session.merge(processed, Req.nil))((ns, f) => f(ns)))
 
     }
 

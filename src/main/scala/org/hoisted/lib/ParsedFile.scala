@@ -21,6 +21,8 @@ final case class PathAndSuffix(path: List[String], suffix: Option[String])
 
 object ParsedFile {
 
+  lazy val w3cDateTimeFormat = DateTimeFormat.forPattern("yyyy-MM-dd'T'HH:mm:ssZ")
+
   object CurrentTimeZone extends ThreadGlobal[DateTimeZone]
 
   lazy val dateFormats = List(DateTimeFormat.forPattern("EEE, dd MMM yyyy HH:mm:ss Z"),
@@ -37,7 +39,7 @@ object ParsedFile {
     DateTimeFormat.forPattern("yyyy-MM-dd"),
     DateTimeFormat.forPattern("yyyy/MM/dd"),
     ISODateTimeFormat.basicDateTime(),
-    ISODateTimeFormat.basicDateTime(),
+    ISODateTimeFormat.basicDate(),
     DateTimeFormat.longDateTime(),
     DateTimeFormat.fullDateTime(),
     DateTimeFormat.fullDate(),
@@ -87,7 +89,7 @@ object ParsedFile {
           bytes <- tryo(Helpers.readWholeStream(fis))
           str = new String(bytes, "UTF-8")
           (str2, info) = MarkdownParser.readTopMetadata(str)
-          html <- Html5.parse(str2.trim)
+          html <- parseHtml5File(str2)
           _ <- tryo(fis.close())
           (_html, metaData) = findHtmlMetaData(html)
         } yield HtmlFile(fi, _html,
@@ -103,6 +105,21 @@ object ParsedFile {
         } yield MarkdownFile(fi, elems,
           HoistedEnvironmentManager.value.updateMetadata(pairsToMetadata(rawMeta), fi))
       case _ => Full(OtherFile(fi))
+    }
+  }
+
+  def parseHtml5File(in: String): Box[NodeSeq] = {
+    val i1 = in.indexOf("<html")
+    val i2 = in.indexOf("<body")
+    val i3 = in.indexOf("</body")
+    val i4 = in.indexOf("</html")
+    if (i1 >= -1 && i2 >= -2 && i3 >= 0 && i4 >= 0 &&
+    i1 < i2 && i2 < i3 && i3 < i4) Html5.parse(in.trim) else {
+      val res = Html5.parse("<html><head><title>I eat yaks</title></head><body>"+in+"</body></html>")
+
+      res.map{
+        res => (res \ "body").collect{case e: Elem => e}.flatMap(_.child)
+      }
     }
   }
 
@@ -155,7 +172,7 @@ object ParsedFile {
   }
 
   def append(m1: MetadataMeta.Metadata, key: MetadataKey, value: MetadataValue): MetadataMeta.Metadata =
-    m1 + (key -> (m1.getOrElse(key, NullMetadataValue) ++ value))
+    m1 + (key -> (m1.getOrElse(key, NullMetadataValue).append(value, key)))
 
 
 }
@@ -259,18 +276,13 @@ final case class OtherFile(fileInfo: FileInfo,
     def copy(from: File) {
       val in = new FileInputStream(from)
       try {
-
-        try {
           var len = 0
           while ( {
-            len = in.read(buffer, 0, bufLen);
+            len = in.read(buffer, 0, bufLen)
             len >= 0
           }) {
             if (len > 0) out.write(buffer, 0, len)
           }
-        } finally {
-          out.close()
-        }
       } finally {
         in.close()
       }
@@ -279,6 +291,31 @@ final case class OtherFile(fileInfo: FileInfo,
     fileInfo.file.foreach(copy(_))
   }
 }
+
+/*
+
+
+    HWPFDocumentCore wordDocument = WordToHtmlUtils.loadDoc(new FileInputStream(file));
+
+    WordToHtmlConverter wordToHtmlConverter = new WordToHtmlConverter(
+            DocumentBuilderFactory.newInstance().newDocumentBuilder()
+                    .newDocument());
+    wordToHtmlConverter.processDocument(wordDocument);
+    Document htmlDocument = wordToHtmlConverter.getDocument();
+    ByteArrayOutputStream out = new ByteArrayOutputStream();
+    DOMSource domSource = new DOMSource(htmlDocument);
+    StreamResult streamResult = new StreamResult(out);
+
+    TransformerFactory tf = TransformerFactory.newInstance();
+    Transformer serializer = tf.newTransformer();
+    serializer.setOutputProperty(OutputKeys.ENCODING, "UTF-8");
+    serializer.setOutputProperty(OutputKeys.INDENT, "yes");
+    serializer.setOutputProperty(OutputKeys.METHOD, "html");
+    serializer.transform(domSource, streamResult);
+    out.close();
+
+
+ */
 
 final case class FileInfo(file: Box[File], relPath: String, name: String, pureName: String, suffix: Option[String]) {
   lazy val pathAndSuffix: PathAndSuffix =
