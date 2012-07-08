@@ -13,7 +13,7 @@ import org.joda.time.format.DateTimeFormat
 
 
 object VeryTesty {
-  def apply() = RunHoisted(new File("/tmp/telegram889598712388137454"), new File("/tmp/outfrog"))
+  def apply() = RunHoisted(new File("/Users/dpp/proj/blog2"), new File("/Users/dpp/tmp/outfrog"))
 }
 
 /**

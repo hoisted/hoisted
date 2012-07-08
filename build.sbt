@@ -35,6 +35,7 @@ libraryDependencies ++= {
 
 libraryDependencies ++= {
   Seq(
+    "org.apache.tika" % "tika-parsers" % "1.1",
     "junit" % "junit" % "4.7" % "test",
     "org.pegdown" %  "pegdown" % "1.1.0",
     "org.eclipse.jgit" % "org.eclipse.jgit" % "1.3.0.201202151440-r",

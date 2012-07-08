@@ -2,12 +2,24 @@ package org.hoisted.lib
 
 import net.liftweb._
 import common._
+import common.Full
 import util._
 import Helpers._
 import xml.{UnprefixedAttribute, PrefixedAttribute, Elem, NodeSeq}
-import java.io.{PrintWriter, File, OutputStream, FileInputStream}
+import java.io._
 import org.joda.time.{DateTimeZone, DateTime}
 import org.joda.time.format.{DateTimeFormatter, ISODateTimeFormat, DateTimeFormat}
+import org.apache.poi.hwpf.converter.{WordToHtmlConverter, AbstractWordUtils, WordToHtmlUtils}
+import javax.xml.parsers.DocumentBuilderFactory
+import javax.xml.transform.dom.DOMSource
+import javax.xml.transform.stream.StreamResult
+import javax.xml.transform.{OutputKeys, TransformerFactory}
+import org.apache.poi.hwpf.HWPFDocument
+import org.apache.poi.xwpf.usermodel.XWPFDocument
+import org.apache.tika.sax.{ToHTMLContentHandler, BodyContentHandler}
+import org.apache.tika.metadata.Metadata
+import org.apache.tika.parser.AutoDetectParser
+import javax.xml.transform.sax.SAXTransformerFactory
 
 /**
  * Created with IntelliJ IDEA.
@@ -70,8 +82,87 @@ object ParsedFile {
     (in \ "content").headOption.map(_.child) getOrElse in
 
 
+  /*
+
+
+    HWPFDocumentCore wordDocument = WordToHtmlUtils.loadDoc(new FileInputStream(file));
+
+    WordToHtmlConverter wordToHtmlConverter = new WordToHtmlConverter(
+            DocumentBuilderFactory.newInstance().newDocumentBuilder()
+                    .newDocument());
+    wordToHtmlConverter.processDocument(wordDocument);
+    Document htmlDocument = wordToHtmlConverter.getDocument();
+    ByteArrayOutputStream out = new ByteArrayOutputStream();
+    DOMSource domSource = new DOMSource(htmlDocument);
+    StreamResult streamResult = new StreamResult(out);
+
+    TransformerFactory tf = TransformerFactory.newInstance();
+    Transformer serializer = tf.newTransformer();
+    serializer.setOutputProperty(OutputKeys.ENCODING, "UTF-8");
+    serializer.setOutputProperty(OutputKeys.INDENT, "yes");
+    serializer.setOutputProperty(OutputKeys.METHOD, "html");
+    serializer.transform(domSource, streamResult);
+    out.close();
+
+
+ */
+
   def apply(fi: FileInfo): Box[ParsedFile] = {
     fi.suffix.map(_.toLowerCase) match {
+      case Some("doc") | Some("docx") | Some("rtf") | Some("pages") =>
+        (for {
+          realFile <- fi.file
+          inputStream <- tryo(new FileInputStream(realFile))
+          out = new ByteArrayOutputStream()
+          handler = new ToHTMLContentHandler(out, "UTF-8")
+          metadata = new Metadata()
+          myParser = new AutoDetectParser()
+          thing <- tryo(try {myParser.parse(inputStream, handler, metadata)} finally {tryo(inputStream.close)})
+          str = new String(out.toByteArray, "UTF-8")
+          html <- parseHtml5File(str)
+
+        } yield {
+          val h2: NodeSeq = (html \ "body").toList.collect{
+            case e: Elem => e
+          }.flatMap(_.child)
+
+          val md =
+          metadata.names().foldLeft[MetadataMeta.Metadata](Map.empty){(map, key) =>
+            val k2 = MetadataKey(key)
+            metadata.getValues(key).toList match {
+            case Nil => map
+            case x::Nil => map + (k2 -> MetadataValue(x))
+            case xs => map + (k2 -> ListMetadataValue(xs.map(MetadataValue(_))))
+          }}
+
+          HtmlFile(fi, h2, HoistedEnvironmentManager.value.updateMetadata(md, fi))
+        }) or Full(OtherFile(fi))
+
+        /*
+
+scala> MD is Map(StringMetadataKey(line-count) -> StringMetadataValue(1), StringMetadataKey(creation-date) -> StringMetadataValue(2012-07-08T00:09:00Z),
+ StringMetadataKey(last-author) -> StringMetadataValue(David Pollak), StringMetadataKey(page-count) -> StringMetadataValue(1),
+ StringMetadataKey(revision-number) -> StringMetadataValue(1), StringMetadataKey(last-modified) -> StringMetadataValue(2012-07-08T17:38:00Z),
+  StringMetadataKey(content-type) -> StringMetadataValue(application/vnd.openxmlformats-officedocument.wordprocessingml.document),
+   StringMetadataKey(xmptpg:npages) -> StringMetadataValue(1), StringMetadataKey(paragraph-count) -> StringMetadataValue(1),
+   StringMetadataKey(application-name) -> StringMetadataValue(Microsoft Macintosh Word),
+   StringMetadataKey(application-version) -> StringMetadataValue(12.0000), DateKey -> StringMetadataValue(2012-07-08T00:09:00Z),
+   StringMetadataKey(total-time) -> StringMetadataValue(16), TemplateKey -> StringMetadataValue(Normal.dotm))
+MD is Map(StringMetadataKey(creation-date) -> StringMetadataValue(2012-07-08T18:56:00Z), StringMetadataKey(last-author) -> StringMetadataValue(David Pollak),
+ StringMetadataKey(word-count) -> StringMetadataValue(41), StringMetadataKey(page-count) -> StringMetadataValue(1),
+  StringMetadataKey(revision-number) -> StringMetadataValue(2), StringMetadataKey(content-type) -> StringMetadataValue(application/msword),
+  StringMetadataKey(last-save-date) -> StringMetadataValue(2012-07-08T18:56:00Z), StringMetadataKey(subject) -> StringMetadataValue(),
+   StringMetadataKey(xmptpg:npages) -> StringMetadataValue(1), TitleKey -> StringMetadataValue(),
+    StringMetadataKey(application-name) -> StringMetadataValue(Microsoft Macintosh Word), StringMetadataKey(keywords) -> StringMetadataValue(),
+    StringMetadataKey(last-printed) -> StringMetadataValue(2012-07-08T18:55:00Z), StringMetadataKey(character count) -> StringMetadataValue(239),
+     TemplateKey -> StringMetadataValue(Normal.dotm), AuthorKey -> StringMetadataValue(David Pollak))
+MD is Map(AuthorKey -> StringMetadataValue(David Pollak), StringMetadataKey(content-type) -> ListMetadataValue(List(StringMetadataValue(application/rtf), StringMetadataValue(application/rtf))))
+SLF4J: Failed to load class "org.slf4j.impl.StaticLoggerBinder".
+SLF4J: Defaulting to no-operation (NOP) logger implementation
+SLF4J: See http://www.slf4j.org/codes.html#StaticLoggerBinder for further details.
+res0: net.liftweb.common.Box[org.hoisted.lib.HoistedTransformMetaData] = Full(HoistedTransformMetaData())
+         */
+
       case Some("xml") | Some("cms.xml") =>
         for {
           realFile <- fi.file
@@ -292,30 +383,7 @@ final case class OtherFile(fileInfo: FileInfo,
   }
 }
 
-/*
 
-
-    HWPFDocumentCore wordDocument = WordToHtmlUtils.loadDoc(new FileInputStream(file));
-
-    WordToHtmlConverter wordToHtmlConverter = new WordToHtmlConverter(
-            DocumentBuilderFactory.newInstance().newDocumentBuilder()
-                    .newDocument());
-    wordToHtmlConverter.processDocument(wordDocument);
-    Document htmlDocument = wordToHtmlConverter.getDocument();
-    ByteArrayOutputStream out = new ByteArrayOutputStream();
-    DOMSource domSource = new DOMSource(htmlDocument);
-    StreamResult streamResult = new StreamResult(out);
-
-    TransformerFactory tf = TransformerFactory.newInstance();
-    Transformer serializer = tf.newTransformer();
-    serializer.setOutputProperty(OutputKeys.ENCODING, "UTF-8");
-    serializer.setOutputProperty(OutputKeys.INDENT, "yes");
-    serializer.setOutputProperty(OutputKeys.METHOD, "html");
-    serializer.transform(domSource, streamResult);
-    out.close();
-
-
- */
 
 final case class FileInfo(file: Box[File], relPath: String, name: String, pureName: String, suffix: Option[String]) {
   lazy val pathAndSuffix: PathAndSuffix =
