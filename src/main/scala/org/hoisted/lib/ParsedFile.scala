@@ -109,6 +109,7 @@ object ParsedFile {
 
   def apply(fi: FileInfo): Box[ParsedFile] = {
     fi.suffix.map(_.toLowerCase) match {
+        /*
       case Some("doc") | Some("docx") | Some("rtf") | Some("pages") =>
         (for {
           realFile <- fi.file
@@ -163,6 +164,7 @@ SLF4J: See http://www.slf4j.org/codes.html#StaticLoggerBinder for further detail
 res0: net.liftweb.common.Box[org.hoisted.lib.HoistedTransformMetaData] = Full(HoistedTransformMetaData())
          */
 
+*/
       case Some("xml") | Some("cms.xml") =>
         for {
           realFile <- fi.file
@@ -195,6 +197,7 @@ res0: net.liftweb.common.Box[org.hoisted.lib.HoistedTransformMetaData] = Full(Ho
           (elems, rawMeta) <- MarkdownParser.parse(str)
         } yield MarkdownFile(fi, elems,
           HoistedEnvironmentManager.value.updateMetadata(pairsToMetadata(rawMeta), fi))
+
       case _ => Full(OtherFile(fi))
     }
   }

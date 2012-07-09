@@ -45,6 +45,12 @@ object MarkdownParser {
 
     val pd = new PegDownProcessor()
     val raw = pd.markdownToHtml(_in)
-    Html5.parse("<div>"+raw+"</div>").map(ns => (ns.collect{case e: Elem => e}.flatMap(_.child), retPairs))
+
+    val res = Html5.parse("<html><head><title>I eat yaks</title></head><body>"+raw+"</body></html>")
+
+    val r2: Box[NodeSeq] = res.map{
+      res => (res \ "body").collect{case e: Elem => e}.flatMap(_.child)
+    }
+    r2.map(v => v -> retPairs)
   }
 }
