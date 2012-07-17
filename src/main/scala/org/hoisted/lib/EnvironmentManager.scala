@@ -439,50 +439,31 @@ trait EnvironmentManager {
             pw.println("<?xml version=\"1.0\" encoding=\"UTF-8\"?>")
             val xml =
               <feed xmlns="http://www.w3.org/2005/Atom">
-
-                <title type="text">
-                  {siteTitle()}
-                </title>
+                <title type="text">{siteTitle()}</title>
                   <link href={siteLink()}/>
-                <updated>
-                  {w3cFormattedDate(toShow.head)}
-                </updated>
-                <author>
-                  {
+                <updated>{w3cFormattedDate(toShow.head)}</updated>
+                <author>{
                   val names: List[String] = (toShow.flatMap(_.findData(AuthorKey).toList).flatMap(_.asString) :::
                     findMetadata(SiteAuthorKey).toList.flatMap(_.asString.toList))
 
                   val ret = names.flatMap {
                   a =>
-                    <name>
-                      {a}
-                    </name>
+                    <name>{a}</name>
                 }
                   ret
-                  }
-                </author>
-                <id>
-                  {siteGuid()}
-                </id>{toShow.map(post =>
+                  }</author>
+                <id>{siteGuid()}</id>{toShow.map(post =>
                 <entry>
-                  <title type="text">
-                    {computeTitle(post)}
-                  </title>
+                  <title type="text">{computeTitle(post)}</title>
                     <link href={siteLink() + computeLink(post)}/>
-                  <id>
-                    {computeGuid(post)}
-                  </id>
+                  <id>{computeGuid(post)}</id>
                   <author>
                     {(post.findData(AuthorKey).flatMap(_.asString) or
                     findMetadata(SiteAuthorKey).flatMap(_.asString)).toList.flatMap(
-                    a => <name>
-                      {a}
-                    </name>
+                    a => <name>{a}</name>
                   )}
                   </author>
-                  <updated>
-                    {w3cFormattedDate(post)}
-                  </updated>
+                  <updated>{w3cFormattedDate(post)}</updated>
                   <summary type="html">
                     {makeShortHtml(post.html.toList) match {
                     case (ns, false) => ns
