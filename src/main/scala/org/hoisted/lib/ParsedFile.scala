@@ -29,7 +29,9 @@ import javax.xml.transform.sax.SAXTransformerFactory
  * To change this template use File | Settings | File Templates.
  */
 
-final case class PathAndSuffix(path: List[String], suffix: Option[String])
+final case class PathAndSuffix(path: List[String], suffix: Option[String]) {
+  def display: String = path.mkString("/", "/", "") + (suffix.map(s => "." + s) getOrElse "")
+}
 
 object ParsedFile {
 

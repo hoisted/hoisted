@@ -23,10 +23,11 @@ import org.joda.time.format.ISODateTimeFormat
  */
 
 trait EnvironmentManager {
-  private var metadata: MetadataMeta.Metadata = Map()
+  private var _metadata: MetadataMeta.Metadata = Map()
   var menuEntries: List[MenuEntry] = Nil
   var blogPosts: List[ParsedFile] = Nil
   var pages: List[ParsedFile] = Nil
+  def metadata: MetadataMeta.Metadata = _metadata
 
   def menuTitle: NodeSeq => NodeSeq =
     "* *" #> (
@@ -254,7 +255,7 @@ trait EnvironmentManager {
   }
 
   def appendMetadata(key: MetadataKey, value: MetadataValue) {
-    metadata = set(metadata, key, value)
+    _metadata = set(metadata, key, value)
   }
 
   /**

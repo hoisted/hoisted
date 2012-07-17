@@ -3,17 +3,48 @@ package lib
 
 import net.liftweb._
 import common._
+import common.Full
 import http._
 import util._
 import Helpers._
 import java.util.Locale
-import java.io.{FileWriter, FileOutputStream, FileInputStream, File}
+import java.io._
 import xml._
-import org.joda.time.format.DateTimeFormat
-
+import org.slf4j.LoggerFactory
+import ch.qos.logback.classic.LoggerContext
+import ch.qos.logback.classic.joran.JoranConfigurator
 
 object VeryTesty {
-  def apply() = RunHoisted(new File("/Users/dpp/proj/blog2"), new File("/Users/dpp/tmp/outfrog"))
+
+  val xml =
+    """
+      |<configuration>
+      |  <appender name="STDOUT" class="org.hoisted.lib.PerThreadLogger">
+      |    <encoder class="ch.qos.logback.classic.encoder.PatternLayoutEncoder">
+      |      <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} %X{file_name} - %msg%n</pattern>
+      |    </encoder>
+      |  </appender>
+      |
+      |  <root level="info">
+      |    <appender-ref ref="STDOUT" />
+      |  </root>
+      |</configuration>
+    """.stripMargin
+
+  def apply() = {
+
+    Logger.setup = Full(() => {
+    val lc = LoggerFactory.getILoggerFactory().asInstanceOf[LoggerContext];
+    val configurator = new JoranConfigurator();
+    configurator.setContext(lc);
+    // the context was probably already configured by default configuration rules
+    lc.reset();
+      val is: InputStream= new ByteArrayInputStream(xml.getBytes)
+      configurator.doConfigure(is)
+    })
+
+    RunHoisted(new File("/Users/dpp/tmp/blog2"), new File("/Users/dpp/tmp/outfrog")).map(_.logs)
+  }
 }
 
 /**
@@ -36,31 +67,34 @@ trait HoistedRenderer {
   }
 
   def apply(_inDir: File, outDir: File, environment: EnvironmentManager = new DefaultEnvironmentManager): Box[HoistedTransformMetaData] = {
-    HoistedEnvironmentManager.doWith(environment) {
-      val inDir = seekInDir(_inDir)
-      for {
-        deleteAll <- tryo(deleteAll(outDir))
-        theDir <- tryo(outDir.mkdirs())
-        allFiles <- tryo(allFiles(inDir, f => f.exists() && !f.getName.startsWith(".") && f.getName.toLowerCase != "readme" &&
-          f.getName.toLowerCase != "readme.md"))
-        fileInfo <- tryo(allFiles.map(fileInfo(inDir)))
-        _parsedFiles = (fileInfo: List[FileInfo]).flatMap(ParsedFile.apply _).filter(HoistedEnvironmentManager.value.isValid)
-        parsedFiles = ensureTemplates(_parsedFiles)
+    val log = new ByteArrayOutputStream()
+    Logstream.doWith(log) {
+      HoistedEnvironmentManager.doWith(environment) {
+        val inDir = seekInDir(_inDir)
+        for {
+          deleteAll <- tryo(deleteAll(outDir))
+          theDir <- tryo(outDir.mkdirs())
+          allFiles <- tryo(allFiles(inDir, f => f.exists() && !f.getName.startsWith(".") && f.getName.toLowerCase != "readme" &&
+            f.getName.toLowerCase != "readme.md"))
+          fileInfo <- tryo(allFiles.map(fileInfo(inDir)))
+          _parsedFiles = (fileInfo: List[FileInfo]).flatMap(ParsedFile.apply _).filter(HoistedEnvironmentManager.value.isValid)
+          parsedFiles = ensureTemplates(_parsedFiles)
 
-        _ = HoistedEnvironmentManager.value.pages = parsedFiles
+          _ = HoistedEnvironmentManager.value.pages = parsedFiles
 
-        fileMap = byName(parsedFiles)
-        templates = createTemplateLookup(parsedFiles)
-        menu = HoistedEnvironmentManager.value.computeMenuItems(parsedFiles)
-        _ = HoistedEnvironmentManager.value.menuEntries = menu
+          fileMap = byName(parsedFiles)
+          templates = createTemplateLookup(parsedFiles)
+          menu = HoistedEnvironmentManager.value.computeMenuItems(parsedFiles)
+          _ = HoistedEnvironmentManager.value.menuEntries = menu
 
-        posts = HoistedEnvironmentManager.value.computePosts(parsedFiles)
-        _ = HoistedEnvironmentManager.value.blogPosts = posts
+          posts = HoistedEnvironmentManager.value.computePosts(parsedFiles)
+          _ = HoistedEnvironmentManager.value.blogPosts = posts
 
-        transformedFiles = env.syntheticFiles() ++ parsedFiles.map(f => runTemplater(f, templates))
+          transformedFiles = env.syntheticFiles() ++ parsedFiles.map(f => runTemplater(f, templates))
 
-        done <- tryo(writeFiles(transformedFiles, inDir, outDir))
-      } yield HoistedTransformMetaData()
+          done <- tryo(writeFiles(transformedFiles, inDir, outDir))
+        } yield HoistedTransformMetaData(new String(log.toByteArray), transformedFiles, env.metadata, env)
+      }
     }
   }
 
@@ -208,6 +242,7 @@ trait HoistedRenderer {
 
     }
 
+    MDC.clear()
     S.initIfUninitted(session) {
       LiftRules.autoIncludeAjaxCalc.doWith(() => ignore => false) {
         LiftRules.allowParallelSnippets.doWith(() => false) {
@@ -215,13 +250,14 @@ trait HoistedRenderer {
             LiftRules.snippetWhiteList.doWith(() => env.snippets) {
               LiftRules.externalTemplateResolver.doWith(() => () => lu) {
                 CurrentFile.doWith(f) {
+                  MDC.put("file_name" -> f.pathAndSuffix.display)
                   env.beginRendering(f)
                   try {
                     f match {
                       case todo: ParsedFile with HasHtml with HasMetaData if HoistedEnvironmentManager.value.isHtml(todo) =>
                         HtmlFile(todo.fileInfo,
                           insureChrome(todo,
-                            session.processSurroundAndInclude(todo.fileInfo.pureName, todo.html)),
+                            session.processSurroundAndInclude(todo.pathAndSuffix.display, todo.html)),
                           todo.metaData, todo.uniqueId)
                       case d => d
                     }
@@ -285,6 +321,8 @@ trait HoistedRenderer {
 
 }
 
-final case class HoistedTransformMetaData()
+final case class HoistedTransformMetaData(logs: String, files: Seq[ParsedFile],
+                                          globalMetadata: MetadataMeta.Metadata,
+                                          env: EnvironmentManager)
 
 
