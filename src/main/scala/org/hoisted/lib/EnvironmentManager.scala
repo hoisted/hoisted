@@ -89,6 +89,8 @@ trait EnvironmentManager {
       ("menu", "title") -> Full(menuTitle),
       ("menu", "items") -> Full(menuItems),
       ("site", "name") -> Full(siteName),
+      ("google-analytics", "render") -> Full(BaseSnippets.googleAnalytics),
+      ("google_analytics", "render") -> Full(BaseSnippets.googleAnalytics),
       ("title", "render") -> Full(BaseSnippets.doTitle _),
       ("withparam", "render") -> Full(WithParam.render _),
       ("embed", "render") -> Full(Embed.render _),
