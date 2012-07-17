@@ -5,21 +5,11 @@ import common._
 import common.Full
 import util._
 import Helpers._
-import xml.{UnprefixedAttribute, PrefixedAttribute, Elem, NodeSeq}
+import scala.xml._
 import java.io._
 import org.joda.time.{DateTimeZone, DateTime}
 import org.joda.time.format.{DateTimeFormatter, ISODateTimeFormat, DateTimeFormat}
-import org.apache.poi.hwpf.converter.{WordToHtmlConverter, AbstractWordUtils, WordToHtmlUtils}
-import javax.xml.parsers.DocumentBuilderFactory
-import javax.xml.transform.dom.DOMSource
-import javax.xml.transform.stream.StreamResult
-import javax.xml.transform.{OutputKeys, TransformerFactory}
-import org.apache.poi.hwpf.HWPFDocument
-import org.apache.poi.xwpf.usermodel.XWPFDocument
-import org.apache.tika.sax.{ToHTMLContentHandler, BodyContentHandler}
-import org.apache.tika.metadata.Metadata
-import org.apache.tika.parser.AutoDetectParser
-import javax.xml.transform.sax.SAXTransformerFactory
+import collection.mutable.ListBuffer
 
 /**
  * Created with IntelliJ IDEA.
@@ -174,8 +164,9 @@ res0: net.liftweb.common.Box[org.hoisted.lib.HoistedTransformMetaData] = Full(Ho
           xml <- PCDataXmlParser(fis)
           _ <- tryo(fis.close())
           metaData = findXmlMetaData(xml)
-        } yield XmlFile(fi, findBody(xml), xml,
-          HoistedEnvironmentManager.value.updateMetadata(metaData, fi))
+          (realBody, headMeta) = findHeaders(findBody(xml))
+        } yield XmlFile(fi, realBody, xml,
+          HoistedEnvironmentManager.value.updateMetadata(metaData ++ headMeta, fi))
 
       case Some("html") | Some("htm") =>
         for {
@@ -187,9 +178,10 @@ res0: net.liftweb.common.Box[org.hoisted.lib.HoistedTransformMetaData] = Full(Ho
           html <- parseHtml5File(str2)
           _ <- tryo(fis.close())
           (_html, metaData) = findHtmlMetaData(html)
-        } yield HtmlFile(fi, _html,
+          (__html, headMeta) = findHeaders(_html)
+        } yield HtmlFile(fi, __html,
         HoistedEnvironmentManager.value.updateMetadata(
-          mergeMetadata(pairsToMetadata(info), metaData), fi))
+          mergeMetadata(pairsToMetadata(info), metaData ++ headMeta), fi))
 
       case Some("md") =>
         for {
@@ -197,11 +189,63 @@ res0: net.liftweb.common.Box[org.hoisted.lib.HoistedTransformMetaData] = Full(Ho
           whole <- tryo(Helpers.readWholeFile(realFile))
           str = new String(whole, "UTF-8")
           (elems, rawMeta) <- MarkdownParser.parse(str)
-        } yield MarkdownFile(fi, elems,
-          HoistedEnvironmentManager.value.updateMetadata(pairsToMetadata(rawMeta), fi))
+          (html, headMeta) = findHeaders(elems)
+        } yield MarkdownFile(fi, html,
+          HoistedEnvironmentManager.value.updateMetadata(pairsToMetadata(rawMeta) ++ headMeta, fi))
 
       case _ => Full(OtherFile(fi))
     }
+  }
+
+  private object GetHeader {
+    def unapply(in: Node): Option[(Int, Elem)] = in match {
+      case e: Elem =>
+        val lc = e.label.toLowerCase
+        if (null eq e.prefix && lc.length == 2 && lc.charAt(0) == 'h' && lc.charAt(1) >= '1' && lc.charAt(1) <= '6') {
+          Some(((lc.charAt(1) - '0').toInt, e))
+        } else None
+      case _ => None
+    }
+  }
+
+  private def buildMetadataValue(in: (Int, String)): MetadataValue =
+  KeyedMetadataValue(HTagLevelKey -> StringMetadataValue(in._1.toString),
+  HTagIdKey -> StringMetadataValue(in._2))
+
+  // find and record the H* depth... plus add an id to each h* tag
+  def findHeaders(in: NodeSeq): (NodeSeq, MetadataMeta.Metadata) = {
+    def morphIt(in: NodeSeq): (NodeSeq, MetadataMeta.Metadata) = {
+      val lb = new ListBuffer[(Int, String)]
+
+      val res = in.map {
+        case GetHeader(i, e) =>
+          val id = e.attribute("id")
+          if (id.isDefined) {
+            lb.append(i -> id.get.text)
+            e
+          } else {
+            import Helpers._
+            val i2 = Helpers.nextFuncName
+            lb.append(i -> i2)
+            e % ("id" -> i2)
+          }
+        case x => x
+      }
+
+      (res, Map(HTagsKey -> ListMetadataValue(lb.toList.map(buildMetadataValue))))
+    }
+  if ((in \ "body").length > 0) {
+    var info: MetadataMeta.Metadata = Map.empty
+    val nodes = ("body *" #> ((ns: NodeSeq) => {
+      val (a, b) = morphIt(ns)
+      info = b
+      a
+    })).apply(in)
+
+    (nodes, info)
+  } else {
+    morphIt(in)
+  }
   }
 
   def parseHtml5File(in: String): Box[NodeSeq] = {

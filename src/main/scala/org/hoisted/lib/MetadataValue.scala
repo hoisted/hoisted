@@ -54,6 +54,8 @@ trait MetadataValue {
   def asNodeSeq: Box[NodeSeq] = Empty
 
   def asListString: Box[List[String]] = Empty
+
+  def map: Box[MetadataMeta.Metadata] = Empty
 }
 
 case object NullMetadataValue extends MetadataValue {
@@ -70,6 +72,15 @@ final case class StringMetadataValue(s: String) extends MetadataValue  {
   lazy val asDate: Box[DateTime] = ParsedFile.parseDate(s.trim)
   lazy val asInt: Box[Int] = Helpers.asInt(s)
 
+}
+
+final case class KeyedMetadataValue(pairs: (MetadataKey, MetadataValue)*) extends MetadataValue  {
+  def asString: Box[String] = Empty
+  def asBoolean: Box[Boolean] = Empty
+  def asDate: Box[DateTime] = Empty
+  def asInt: Box[Int] = Empty
+
+  override lazy val map: Box[MetadataMeta.Metadata] = Full(Map(pairs :_*))
 }
 
 final case class ListMetadataValue(lst: List[MetadataValue]) extends MetadataValue {

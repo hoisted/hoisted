@@ -190,12 +190,26 @@ case object NoSyntheticRssFile extends MetadataKey {
   def key = "no_synthetic_rss_file"
 }
 
+case object HTagsKey extends MetadataKey {
+  def global = false
+  def key = "h_tags"
+}
+
+case object HTagLevelKey extends MetadataKey {
+  def global = false
+  def key = "h_tag_level"
+}
+
+case object HTagIdKey extends MetadataKey {
+  def global = false
+  def key = "h_tag_id"
+}
 
 object MetadataKey {
   lazy val knownKeys = List(OrderKey, OutputPathKey, TemplateURLKey, SiteNameKey, LinkKey,
     TitleKey, TemplateKey, ServeKey,
     BlogRootKey, TypeKey, SiteAuthorKey, AuthorKey,
-    DateKey, SiteLinkKey,
+    DateKey, SiteLinkKey, HTagsKey, HTagIdKey, HTagLevelKey,
     CategoryKey, NoSyntheticRssFile,
     HasBlogKey, TagsKey,
     ValidFromKey, ValidToKey, EventKey, PostKey, LayoutKey, RedirectKey)
