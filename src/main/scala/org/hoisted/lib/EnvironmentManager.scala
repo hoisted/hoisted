@@ -4,7 +4,7 @@ import net.liftweb._
 import builtin.snippet._
 import common._
 import common.Full
-import http.{RequestVar, Templates}
+import http.{SessionMemoize, RequestVar, Templates}
 import util._
 import Helpers._
 import MetadataMeta._
@@ -269,11 +269,15 @@ trait EnvironmentManager {
   def findMetadata(key: MetadataKey): Box[MetadataValue] = metadata.get(key)
 
 
+  private object titleFNMemo extends SessionMemoize[Hashly, String] {
+    override lazy val __nameSalt = Helpers.nextFuncName
+  }
+
   /**
    * Compute the title from the filename
    */
   def computeTitleFromFileName: (ParsedFile) => String =
-    pf => capify(pf.pathAndSuffix.path.takeRight(1).head)
+    pf => titleFNMemo(pf, capify(pf.pathAndSuffix.path.takeRight(1).head))
 
   /**
    * Replace the '_' with ' ' and then make the first character
@@ -290,24 +294,39 @@ trait EnvironmentManager {
     ret
   }
 
+  private object titleMemo extends SessionMemoize[Hashly, String] {
+    override lazy val __nameSalt = Helpers.nextFuncName
+  }
+
   /**
    * Compute the title of the file
    */
-  def computeTitle: (ParsedFile) => String = pf => {
+  def computeTitle: (ParsedFile) => String = pf => titleMemo(pf, {
     pf match {
       case md: ParsedFile with HasMetaData => md.findData(TitleKey).flatMap(_.asString) or
         pf.findData(LinkKey).flatMap(_.asString) openOr computeTitleFromFileName(pf)
       case _ => computeTitleFromFileName(pf)
     }
+  })
+
+
+  private case class Hashly(i: Int)
+
+  private object Hashly {
+    implicit def anyToHashly(in: Any): Hashly = Hashly(System.identityHashCode(in))
+  }
+
+  private object linkTextMemo extends SessionMemoize[Hashly, String] {
+    override lazy val __nameSalt = Helpers.nextFuncName
   }
 
   /**
    * Compute the link text for the file
    */
   def computeLinkText: (ParsedFile) => String =
-    pf => pf.findData(LinkKey).flatMap(_.asString). openOr(
+    pf => linkTextMemo(pf, pf.findData(LinkKey).flatMap(_.asString). openOr(
       computeTitle(pf)
-    )
+    ))
 
   /**
    * Collect the HTML files
@@ -391,7 +410,11 @@ trait EnvironmentManager {
 
   def striptHtmlSuffix: String => String = str => if (str.endsWith(".html")) str.dropRight(5) else str
 
-  def computeOutputFileName: ParsedFile => String = m => {
+  private object outFileNameMemo extends SessionMemoize[Hashly, String] {
+    override lazy val __nameSalt = Helpers.nextFuncName
+  }
+
+  def computeOutputFileName: ParsedFile => String = m =>  outFileNameMemo(m, {
     if (isHtml(m)) {
     val ret =
       m.findData(OutputPathKey).flatMap(_.asString).map(insureHtmlSuffix) openOr m.pathAndSuffix.path.mkString("/", "/", ".html")
@@ -400,14 +423,18 @@ trait EnvironmentManager {
     } else {
         m.findData(OutputPathKey).flatMap(_.asString) openOr m.pathAndSuffix.path.mkString("/", "/", m.pathAndSuffix.suffix.map(s => "."+s).getOrElse(""))
     }
+  })
+
+  private object linkMemo extends SessionMemoize[Hashly, String] {
+    override lazy val __nameSalt = Helpers.nextFuncName
   }
 
   def computeLink: ParsedFile => String = pf =>
-    pf.findData(RedirectKey).flatMap(_.asString) openOr
+    linkMemo(pf, pf.findData(RedirectKey).flatMap(_.asString) openOr
     striptHtmlSuffix(computeOutputFileName(pf)) match {
     case s if s.endsWith("/index") => s.dropRight(5)
     case s => s
-  }
+  })
 
   def isHtml: ParsedFile => Boolean = pf => {
     pf match {

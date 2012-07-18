@@ -201,7 +201,8 @@ object BaseSnippets {
         val bd = env.computeDate(b)
         ad.getMillis < bd.getMillis
       }
-      case "title" | "name" => (a, b) => env.computeTitle(a).toLowerCase < env.computeTitle(b).toLowerCase
+      case "name" => (a, b) => env.computeLinkText(a).toLowerCase < env.computeLinkText(b).toLowerCase
+      case "title" => (a, b) => env.computeTitle(a).toLowerCase < env.computeTitle(b).toLowerCase
       case x =>
         val k = MetadataKey(x)
         (a, b) => a.findData(k).flatMap(_.asString).map(_.toLowerCase).openOr("") <

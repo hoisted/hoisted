@@ -92,8 +92,16 @@ trait HoistedRenderer {
 
           transformedFiles = env.syntheticFiles() ++ parsedFiles.map(f => runTemplater(f, templates))
 
+        aliases = {
+          val ret = transformedFiles.flatMap(pf =>
+            pf.findData(AliasKey).toList.flatMap(_.forceListString).map(a => Alias(a, env.computeOutputFileName(pf)))
+          ).toList
+
+          ret
+        }
+
           done <- tryo(writeFiles(transformedFiles, inDir, outDir))
-        } yield HoistedTransformMetaData(new String(log.toByteArray), transformedFiles, env.metadata, env)
+        } yield HoistedTransformMetaData(new String(log.toByteArray), transformedFiles, env.metadata, env, aliases)
       }
     }
   }
@@ -323,6 +331,7 @@ trait HoistedRenderer {
 
 final case class HoistedTransformMetaData(logs: String, files: Seq[ParsedFile],
                                           globalMetadata: MetadataMeta.Metadata,
-                                          env: EnvironmentManager)
+                                          env: EnvironmentManager,
+                                           aliases: List[Alias])
 
 

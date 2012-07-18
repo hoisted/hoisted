@@ -185,6 +185,11 @@ case object RedirectKey extends MetadataKey {
   def key = "redirect"
 }
 
+case object AliasKey extends MetadataKey {
+  def global = false
+  def key = "alias"
+}
+
 case object NoSyntheticRssFile extends MetadataKey {
   def global = true
   def key = "no_synthetic_rss_file"
@@ -211,10 +216,8 @@ object MetadataKey {
     BlogRootKey, TypeKey, SiteAuthorKey, AuthorKey,
     DateKey, SiteLinkKey, HTagsKey, HTagIdKey, HTagLevelKey,
     CategoryKey, NoSyntheticRssFile,
-    HasBlogKey, TagsKey,
+    HasBlogKey, TagsKey, AliasKey,
     ValidFromKey, ValidToKey, EventKey, PostKey, LayoutKey, RedirectKey)
-
-  // implicit def strToKey(in: String): MetadataKey = this.apply(in)
 
   def apply(s: String): MetadataKey = {
     val (_s, top) = if (s.startsWith("!")) (s.substring(1), true) else (s, false)

@@ -432,7 +432,12 @@ final case class OtherFile(fileInfo: FileInfo,
   }
 }
 
-
+/**
+ * The alias of a URL to another file
+ * @param from the original place
+ * @param to the resulting file
+ */
+case class Alias(from: String, to: String)
 
 final case class FileInfo(file: Box[File], relPath: String, name: String, pureName: String, suffix: Option[String]) {
   lazy val pathAndSuffix: PathAndSuffix =
