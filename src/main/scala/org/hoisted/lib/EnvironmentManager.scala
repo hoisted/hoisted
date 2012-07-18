@@ -89,6 +89,7 @@ trait EnvironmentManager {
       ("menu", "title") -> Full(menuTitle),
       ("menu", "items") -> Full(menuItems),
       ("site", "name") -> Full(siteName),
+      ("group", "render") -> Full(BaseSnippets.group(this)),
       ("google-analytics", "render") -> Full(BaseSnippets.googleAnalytics),
       ("google_analytics", "render") -> Full(BaseSnippets.googleAnalytics),
       ("title", "render") -> Full(BaseSnippets.doTitle _),
@@ -160,11 +161,11 @@ trait EnvironmentManager {
   }
 
   @scala.annotation.tailrec
-  final def makeShortHtml(in: List[Node], changed: Boolean = false): (NodeSeq, Boolean) = {
+  final def makeShortHtml(in: List[Node], len: Int = 700, changed: Boolean = false): (NodeSeq, Boolean) = {
     if (in.length == 1) (in, changed) else {
     val ns: NodeSeq = in
     val tl = ns.text.length
-    if (tl < 700) (ns, changed) else makeShortHtml(in.dropRight(1), true)
+    if (tl < len) (ns, changed) else makeShortHtml(in.dropRight(1), len, true)
     }
   }
 
@@ -173,10 +174,10 @@ trait EnvironmentManager {
     case _ => NodeSeq.Empty
   }
 
-  def computeShortContent: ParsedFile => (NodeSeq, Boolean) = {
+  def computeShortContent(pf: ParsedFile, len: Int = 700): (NodeSeq, Boolean) = pf match {
     case h: HasHtml => h.html.toList match {
-      case x :: Nil => makeShortHtml(x.child.toList, false)
-      case xs => makeShortHtml(xs, false)
+      case x :: Nil => makeShortHtml(x.child.toList, len, false)
+      case xs => makeShortHtml(xs, len, false)
     }
     case _ => (NodeSeq.Empty, false)
   }
@@ -198,9 +199,11 @@ trait EnvironmentManager {
       case _ => Empty
     })
 
-  def isBlogPost: ParsedFile => Boolean = _.findData(PostKey).flatMap(_.asBoolean) openOr false
+  def isBlogPost: ParsedFile => Boolean = f =>  f.findData(PostKey).flatMap(_.asBoolean) openOr
+  (f.findData(TypeKey).flatMap(_.asString).map(_.toLowerCase) == Full("post"))
 
-  def isEvent: ParsedFile => Boolean = _.findData(EventKey).flatMap(_.asBoolean) openOr false
+  def isEvent: ParsedFile => Boolean = f =>  f.findData(EventKey).flatMap(_.asBoolean) openOr
+    (f.findData(TypeKey).flatMap(_.asString).map(_.toLowerCase) == Full("event"))
 
   def computeDate: ParsedFile => DateTime = pf => pf.findData(DateKey).flatMap(_.asDate) or
     (pf.fileInfo.file.map(ff => new DateTime(ff.lastModified()))) openOr new DateTime()

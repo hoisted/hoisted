@@ -181,10 +181,54 @@ object BaseSnippets {
 
   )}
 
+  def group(env: EnvironmentManager): NodeSeq => NodeSeq = {
+    val by = (S.attr("by") openOr "post").toLowerCase
+    val order = (S.attr("order") openOr "date").toLowerCase
+
+    val descending = (S.attr("descending").flatMap(Helpers.asBoolean(_)) openOr false)
+
+    val filterFunc: ParsedFile => Boolean = by match {
+      case "post" => env.isBlogPost
+      case "event" => env.isEvent
+      case x => p => p.findData(TypeKey).flatMap(_.asString).map(_.toLowerCase) == Full(x)
+    }
+
+    val pages = env.pages.filter(filterFunc)
+
+    val sortFunc1: (ParsedFile, ParsedFile) => Boolean = order match {
+      case "date" => (a, b) => {
+        val ad = env.computeDate(a)
+        val bd = env.computeDate(b)
+        ad.getMillis < bd.getMillis
+      }
+      case "title" | "name" => (a, b) => env.computeTitle(a).toLowerCase < env.computeTitle(b).toLowerCase
+      case x =>
+        val k = MetadataKey(x)
+        (a, b) => a.findData(k).flatMap(_.asString).map(_.toLowerCase).openOr("") <
+          b.findData(k).flatMap(_.asString).map(_.toLowerCase).openOr("")
+    }
+
+
+    val sortFunc: (ParsedFile, ParsedFile) => Boolean =
+      if (!descending) sortFunc1 else (a, b) => !sortFunc1(a, b)
+
+    val sorted = pages.sortWith(sortFunc)
+    val f = DateTimeFormat.shortDate()
+
+    ("data-post=item" #> sorted.map {
+      p =>
+        val (short, more) = env.computeShortContent(p)
+
+        "data-post=link [href]" #> env.computeLink(p) &
+          "data-post=link *" #> env.computeLinkText(p) &
+          "data-post=shortcontent" #> short &
+          (if (more) ("data-post=more" #> ("a [href]" #> env.computeLink(p))) else "data-post=more" #> (Empty: Box[String])) &
+          "data-post=content" #> env.computeContent(p) &
+          "data-post=date *" #> f.print(env.computeDate(p))
+    }) andThen "* [data-post]" #> (Empty: Box[String])
+  }
 
   def googleAnalytics: NodeSeq => NodeSeq = ns => {
-
-
     val xml = (S.attr("id") or S.attr("googleid"))map(id => """<tail><script type="text/javascript">
       // <![CDATA[
   var _gaq = _gaq || [];

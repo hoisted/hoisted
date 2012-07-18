@@ -201,7 +201,7 @@ res0: net.liftweb.common.Box[org.hoisted.lib.HoistedTransformMetaData] = Full(Ho
     def unapply(in: Node): Option[(Int, Elem)] = in match {
       case e: Elem =>
         val lc = e.label.toLowerCase
-        if (null eq e.prefix && lc.length == 2 && lc.charAt(0) == 'h' && lc.charAt(1) >= '1' && lc.charAt(1) <= '6') {
+        if ((null eq e.prefix) && lc.length == 2 && lc.charAt(0) == 'h' && lc.charAt(1) >= '1' && lc.charAt(1) <= '6') {
           Some(((lc.charAt(1) - '0').toInt, e))
         } else None
       case _ => None
