@@ -210,13 +210,18 @@ case object HTagIdKey extends MetadataKey {
   def key = "h_tag_id"
 }
 
+case object HTagBodyKey extends MetadataKey {
+  def global = false
+  def key = "h_tag_body"
+}
+
 object MetadataKey {
   lazy val knownKeys = List(OrderKey, OutputPathKey, TemplateURLKey, SiteNameKey, LinkKey,
     TitleKey, TemplateKey, ServeKey,
     BlogRootKey, TypeKey, SiteAuthorKey, AuthorKey,
     DateKey, SiteLinkKey, HTagsKey, HTagIdKey, HTagLevelKey,
     CategoryKey, NoSyntheticRssFile,
-    HasBlogKey, TagsKey, AliasKey,
+    HasBlogKey, TagsKey, AliasKey, HTagBodyKey,
     ValidFromKey, ValidToKey, EventKey, PostKey, LayoutKey, RedirectKey)
 
   def apply(s: String): MetadataKey = {

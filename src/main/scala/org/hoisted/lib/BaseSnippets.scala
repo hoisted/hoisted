@@ -109,6 +109,27 @@ object BaseSnippets {
     S.attr("name").map(name => <div id={name}></div>) openOr NodeSeq.Empty
   }
 
+  def hTags: NodeSeq => NodeSeq = {
+    val depth = S.attr("depth").flatMap(Helpers.asInt(_)) openOr 2
+    val info: List[MetadataValue] = CurrentFile.value.findData(HTagsKey) match {
+      case Full(ListMetadataValue(lst)) => lst
+      case _ => Nil
+    }
+
+    val depthClass = S.attr("class") openOr "depth"
+    import Helpers._
+
+    ("data-htag=root" #>
+      (for {
+        md <- info
+          map <- md.map.toList
+          rd <- map.get(HTagLevelKey).toList.flatMap(_.asInt) if rd <= depth
+          body <- map.get(HTagBodyKey).flatMap(_.asNodeSeq)
+          id <- map.get(HTagIdKey).flatMap(_.asString)
+        } yield
+        "data-htag=root [class+]" #> (depthClass + rd) & "a *" #> body & "a [href]" #> ("#"+id) andThen  "* [data-htag]" #> (Empty: Box[String])))
+  }
+
   def doSubs(in: NodeSeq): NodeSeq = {
     val info = for {
       tpe <- S.attr("type").toList

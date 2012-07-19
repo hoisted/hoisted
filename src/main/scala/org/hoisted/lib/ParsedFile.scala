@@ -198,35 +198,35 @@ res0: net.liftweb.common.Box[org.hoisted.lib.HoistedTransformMetaData] = Full(Ho
   }
 
   private object GetHeader {
-    def unapply(in: Node): Option[(Int, Elem)] = in match {
+    def unapply(in: Node): Option[(Int, Elem, NodeSeq)] = in match {
       case e: Elem =>
         val lc = e.label.toLowerCase
         if ((null eq e.prefix) && lc.length == 2 && lc.charAt(0) == 'h' && lc.charAt(1) >= '1' && lc.charAt(1) <= '6') {
-          Some(((lc.charAt(1) - '0').toInt, e))
+          Some(((lc.charAt(1) - '0').toInt, e, e.child))
         } else None
       case _ => None
     }
   }
 
-  private def buildMetadataValue(in: (Int, String)): MetadataValue =
+  private def buildMetadataValue(in: (Int, String, NodeSeq)): MetadataValue =
   KeyedMetadataValue(HTagLevelKey -> StringMetadataValue(in._1.toString),
-  HTagIdKey -> StringMetadataValue(in._2))
+  HTagIdKey -> StringMetadataValue(in._2), HTagBodyKey -> NodeSeqMetadataValue(in._3))
 
   // find and record the H* depth... plus add an id to each h* tag
   def findHeaders(in: NodeSeq): (NodeSeq, MetadataMeta.Metadata) = {
     def morphIt(in: NodeSeq): (NodeSeq, MetadataMeta.Metadata) = {
-      val lb = new ListBuffer[(Int, String)]
+      val lb = new ListBuffer[(Int, String, NodeSeq)]
 
       val res = in.map {
-        case GetHeader(i, e) =>
+        case GetHeader(i, e, body) =>
           val id = e.attribute("id")
           if (id.isDefined) {
-            lb.append(i -> id.get.text)
+            lb.append((i ,id.get.text, body))
             e
           } else {
             import Helpers._
             val i2 = Helpers.nextFuncName
-            lb.append(i -> i2)
+            lb.append((i, i2, body))
             e % ("id" -> i2)
           }
         case x => x

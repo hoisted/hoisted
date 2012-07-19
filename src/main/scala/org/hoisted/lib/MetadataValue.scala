@@ -84,7 +84,7 @@ final case class KeyedMetadataValue(pairs: (MetadataKey, MetadataValue)*) extend
   def asDate: Box[DateTime] = Empty
   def asInt: Box[Int] = Empty
 
-  def forceListString: List[String] = Nil
+  lazy val forceListString: List[String] = pairs.toList.flatMap(_._2.forceListString)
 
   override lazy val map: Box[MetadataMeta.Metadata] = Full(Map(pairs :_*))
 }

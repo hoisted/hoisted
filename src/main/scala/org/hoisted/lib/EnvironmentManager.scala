@@ -105,6 +105,8 @@ trait EnvironmentManager {
       ("move_top", "render") -> Full(BaseSnippets.moveTop),
       ("twitter", "render") -> Full(BaseSnippets.doTwitter),
       ("search", "render") -> Full(BaseSnippets.search),
+      ("htag-list", "render") -> Full(BaseSnippets.hTags),
+      ("htag_list", "render") -> Full(BaseSnippets.hTags),
       ("bootstraputil", "headcomment") -> Full((ignore: NodeSeq) => BootstrapUtil.headComment),
       ("bootstraputil", "bodycomment") -> Full((ignore: NodeSeq) => BootstrapUtil.bodyComment)
     ).withDefaultValue(Empty)
@@ -531,6 +533,10 @@ trait EnvironmentManager {
   var postMergeTransforms: List[NodeSeq => NodeSeq] = Nil
 
   def computePostMergeTransforms: ParsedFile => Seq[NodeSeq => NodeSeq] = pf => postMergeTransforms
+
+  def computeFromToDates: ParsedFile => (Box[DateTime], Box[DateTime]) = pf =>
+  (pf.findData(ValidFromKey).flatMap(_.asDate) or
+    pf.findData(DateKey).flatMap(_.asDate), pf.findData(ValidToKey).flatMap(_.asDate))
 
   def isValid: ParsedFile => Boolean = pf => {
     def computeValidFrom: Boolean =
