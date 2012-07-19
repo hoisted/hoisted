@@ -77,7 +77,9 @@ trait HoistedRenderer {
           allFiles <- tryo(allFiles(inDir, f => f.exists() && !f.getName.startsWith(".") && f.getName.toLowerCase != "readme" &&
             f.getName.toLowerCase != "readme.md"))
           fileInfo <- tryo(allFiles.map(fileInfo(inDir)))
-          _parsedFiles = (fileInfo: List[FileInfo]).flatMap(ParsedFile.apply _).filter(HoistedEnvironmentManager.value.isValid)
+          __parsedFiles = (fileInfo: List[FileInfo]).flatMap(ParsedFile.apply _)
+          _ = env.allPages = __parsedFiles
+          _parsedFiles = __parsedFiles.filter(HoistedEnvironmentManager.value.isValid)
           parsedFiles = ensureTemplates(_parsedFiles)
 
           _ = HoistedEnvironmentManager.value.pages = parsedFiles

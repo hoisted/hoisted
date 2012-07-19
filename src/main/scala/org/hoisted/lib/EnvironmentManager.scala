@@ -27,6 +27,7 @@ trait EnvironmentManager {
   var menuEntries: List[MenuEntry] = Nil
   var blogPosts: List[ParsedFile] = Nil
   var pages: List[ParsedFile] = Nil
+  var allPages: List[ParsedFile] = Nil
   def metadata: MetadataMeta.Metadata = _metadata
 
   def menuTitle: NodeSeq => NodeSeq =
