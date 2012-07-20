@@ -31,7 +31,7 @@ trait EnvironmentManager {
   def metadata: MetadataMeta.Metadata = _metadata
 
   def menuTitle: NodeSeq => NodeSeq =
-    "* *" #> (
+    "* *+" #> (
       CurrentFile.box.map(computeTitle) openOr "Telegram Site")
 
   def siteName: NodeSeq => NodeSeq = {

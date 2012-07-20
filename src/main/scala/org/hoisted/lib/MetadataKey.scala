@@ -197,23 +197,41 @@ case object NoSyntheticRssFile extends MetadataKey {
 
 case object HTagsKey extends MetadataKey {
   def global = false
-  def key = "h_tags"
+  def key = "h-tags"
 }
 
 case object HTagLevelKey extends MetadataKey {
   def global = false
-  def key = "h_tag_level"
+  def key = "h-tag-level"
 }
 
 case object HTagIdKey extends MetadataKey {
   def global = false
-  def key = "h_tag_id"
+  def key = "h-tag-id"
 }
 
 case object HTagBodyKey extends MetadataKey {
   def global = false
-  def key = "h_tag_body"
+  def key = "h-tag-body"
 }
+
+case object MenuLocGroupKey extends MetadataKey {
+  def global = false
+  def key = "menu-locgroup"
+}
+
+case object MenuIconKey extends MetadataKey {
+  def global = false
+  def key = "menu-icon"
+}
+
+case object MenuIconPlacementKey extends MetadataKey {
+  def global = false
+  def key = "menu-icon-placement"
+}
+
+
+
 
 object MetadataKey {
   lazy val knownKeys = List(OrderKey, OutputPathKey, TemplateURLKey, SiteNameKey, LinkKey,
@@ -222,7 +240,9 @@ object MetadataKey {
     DateKey, SiteLinkKey, HTagsKey, HTagIdKey, HTagLevelKey,
     CategoryKey, NoSyntheticRssFile,
     HasBlogKey, TagsKey, AliasKey, HTagBodyKey,
-    ValidFromKey, ValidToKey, EventKey, PostKey, LayoutKey, RedirectKey)
+    ValidFromKey, ValidToKey, EventKey, PostKey, LayoutKey, RedirectKey,
+  MenuLocGroupKey, MenuIconKey, MenuIconPlacementKey
+  )
 
   def apply(s: String): MetadataKey = {
     val (_s, top) = if (s.startsWith("!")) (s.substring(1), true) else (s, false)

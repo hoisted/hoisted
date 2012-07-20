@@ -62,19 +62,34 @@ object BaseSnippets {
   }
 
   def doXmenu: NodeSeq => NodeSeq = ns => {
-    val activeClass = S.attr("active_class") openOr "active"
-    val menus: List[ParsedFile] = HoistedEnvironmentManager.value.findByTag("menu", Empty)
+    val activeClass = S.attr("active_class") or S.attr("active-class") openOr "active"
+    val locgroup = S.attr("locgroup")
+
+    val menus: List[ParsedFile] = HoistedEnvironmentManager.value.findByTag("menu", Empty).
+    filter(p => p.findData(MenuLocGroupKey).flatMap(_.asString) == locgroup)
+
     val sorted = menus.sortWith((a, b) =>
       (a.findData(OrderKey).flatMap(_.asInt) openOr 0) <
         (b.findData(OrderKey).flatMap(_.asInt) openOr 0)
     )
+
+    def buildLink(p: ParsedFile): NodeSeq =
+      p.findData(MenuIconKey).map(_.forceListString) match {
+        case Full(ls) =>
+          def icon = <i class={ls.mkString(" ")}></i>
+          p.findData(MenuIconPlacementKey).flatMap(_.asString).map(_.toLowerCase()) match {
+            case Full("right") => <span>{env.computeLinkText(p)}{icon}</span>
+            case _ => <span>{icon}{env.computeLinkText(p)}</span>
+          }
+        case _ => Text(env.computeLinkText(p))
+      }
 
     if ((ns \\ "item").filter {
       case e: Elem => e.prefix == "menu"
       case _ => false
     }.isDefined) {
       sorted.flatMap(fr =>
-        bind("menu", ns, "item" -> env.computeLinkText(fr),
+        bind("menu", ns, "item" -> buildLink(fr),
           FuncAttrOptionBindParam("class", (value: NodeSeq) =>
             if (fr eq CurrentFile.value) Some(value) else None, "class"),
           AttrBindParam("href", env.computeLink(fr), "href"))
@@ -82,7 +97,7 @@ object BaseSnippets {
     } else {
       ("*" #> sorted.map(fr =>
         "a [href]" #> env.computeLink(fr) &
-          "a *" #> env.computeLinkText(fr) andThen
+          "a *" #> buildLink(fr) andThen
           (if (fr eq CurrentFile.value)
             ("* [class+]" #> activeClass)
           else
@@ -90,11 +105,14 @@ object BaseSnippets {
     }
   }
 
-  def doTitle(ns: NodeSeq): NodeSeq = <head>
-    <title>
-      {ns.text}
-    </title>
-  </head>
+  def doTitle(ns: NodeSeq): NodeSeq = <head><title>{
+    val x: Box[NodeSeq] =
+      for {
+        ses <- S.session
+      } yield ses.processSurroundAndInclude("Do Title", ns)
+
+        x.openOr(NodeSeq.Empty).text
+    }</title></head>
 
   def doBind: NodeSeq => NodeSeq = ignore => {
     S.attr("name").map(name => <div id={name}></div>) openOr NodeSeq.Empty
