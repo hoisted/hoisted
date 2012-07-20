@@ -251,7 +251,7 @@ object BaseSnippets {
   }
 
   def googleAnalytics: NodeSeq => NodeSeq = ns => {
-    val xml = (S.attr("id") or S.attr("googleid"))map(id => """<tail><script type="text/javascript">
+    val xml = (S.attr("id") or S.attr("googleid"))map(id => """<script type="text/javascript">
       // <![CDATA[
   var _gaq = _gaq || [];
   _gaq.push(['_setAccount', """+id.encJs+"""]);
@@ -263,9 +263,9 @@ object BaseSnippets {
     var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
   })();
 // ]]>
-    </script></tail>""")
+    </script>""")
 
-    xml.map(Unparsed(_)) openOr NodeSeq.Empty
+    xml.map(v => <lift:tail>{Unparsed(_)}</lift:tail>) openOr NodeSeq.Empty
 
   }
 
