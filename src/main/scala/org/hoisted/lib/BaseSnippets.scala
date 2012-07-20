@@ -24,15 +24,6 @@ import scala.xml
  */
 
 object BaseSnippets {
-  /*
-  sortWith{
-    case (a, b) =>
-      val d1 = env.computeDate(a)
-      val d2 = env.computeDate(b)
-      d1.getMillis > d2.getMillis
-  }.collect{case hh: HasHtml => hh}.
-   */
-
   lazy val months = Array("January", "February", "March", "April",
   "May", "June", "July", "August", "September", "October",
   "November", "December")
@@ -265,7 +256,7 @@ object BaseSnippets {
 // ]]>
     </script>""")
 
-    xml.map(v => <lift:tail>{Unparsed(_)}</lift:tail>) openOr NodeSeq.Empty
+    xml.map(v => <lift:tail>{Unparsed(v)}</lift:tail>) openOr NodeSeq.Empty
 
   }
 
