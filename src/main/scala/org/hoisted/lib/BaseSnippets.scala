@@ -8,12 +8,14 @@ import Helpers._
 import http.S
 import http.js._
 import JsCmds._
-import builtin.snippet._
 import org.joda.time.format.{DateTimeFormat}
-import actors.remote.Node
 import collection.mutable.ListBuffer
 import scala.xml
-import scala.xml
+import java.net.{URLEncoder, URI}
+import org.apache.http.client.methods.HttpGet
+import org.apache.http.impl.client.DefaultHttpClient
+import org.apache.http.HttpResponse
+
 
 /**
  * Created with IntelliJ IDEA.
@@ -447,4 +449,22 @@ object BootstrapUtil {
   def bodyComment = Unparsed( """  <!--[if IE]>
                         <link rel="stylesheet" type="text/css" href="/css/custom-theme/jquery.ui.1.8.16.ie.css"/>
                         <![endif]-->""")
+}
+
+
+object HttpFetch {
+  def get[T](url: String, params: Seq[(String, String)] = Nil, headers: Seq[(String, String)] = Nil, encoding: String = "UTF-8")(f: HttpResponse => T): T = {
+    val qs = params.map{
+      case (n,v) => URLEncoder.encode(n, encoding) +"="+ URLEncoder.encode(v, encoding)
+    }.mkString("&")
+    val client = new DefaultHttpClient()
+
+    val x = new HttpGet(new URI(if(params.isEmpty) url else url + "?" + qs))
+    headers.foreach{
+      case (h,v) => x.addHeader(h, v)
+    }
+
+    f(client.execute(x))
+  }
+
 }

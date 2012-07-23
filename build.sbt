@@ -36,9 +36,9 @@ libraryDependencies ++= {
 
 libraryDependencies ++= {
   Seq(
-    "org.scalatest" %% "scalatest" % "1.8" % "test" withSources(),
     "org.apache.tika" % "tika-parsers" % "1.1",
     "junit" % "junit" % "4.7" % "test",
+    "org.apache.httpcomponents" % "httpclient" % "4.2.1" % "compile",
     "ch.qos.logback" % "logback-classic" % "1.0.6" % "compile" ,
     "org.pegdown" %  "pegdown" % "1.1.0",
     "org.eclipse.jgit" % "org.eclipse.jgit" % "1.3.0.201202151440-r",
