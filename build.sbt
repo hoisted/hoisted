@@ -1,3 +1,5 @@
+import AssemblyKeys._ // put this at the top of the file
+
 //Project Information
 name := "Hoisted"
 
@@ -28,8 +30,7 @@ version := "0.1-SNAPSHOT"
 libraryDependencies ++= {
   val liftVersion = "2.5-SNAPSHOT"
   Seq(
-    "net.liftweb" %% "lift-webkit" % liftVersion % "compile",
-    "net.liftweb" %% "lift-mapper" % "2.5-SNAPSHOT" % "compile"
+    "net.liftweb" %% "lift-webkit" % liftVersion % "compile"
     )
 }
 
@@ -52,6 +53,14 @@ publishTo <<= version { (v: String) =>
   else
     Some("releases"  at nexus + "service/local/staging/deploy/maven2")
 }
+
+assemblySettings
+
+jarName in assembly := "hoisted.jar"
+
+test in assembly := {}
+
+mainClass in assembly := Some("org.hoisted.lib.Hoist")
 
 publishArtifact in Test := false
 
