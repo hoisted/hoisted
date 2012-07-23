@@ -3,7 +3,7 @@ package org.hoisted.lib
 import net.liftweb._
 import common._
 import util.Html5
-import org.pegdown.PegDownProcessor
+import org.pegdown.{Extensions, PegDownProcessor}
 import xml.{Elem, NodeSeq}
 
 /**
@@ -43,7 +43,7 @@ object MarkdownParser {
   def parse(in: String): Box[(NodeSeq, List[(String, String)])] = {
     val (_in, retPairs) = readTopMetadata(in)
 
-    val pd = new PegDownProcessor()
+    val pd = new PegDownProcessor(Extensions.FENCED_CODE_BLOCKS | Extensions.QUOTES | Extensions.SMARTYPANTS)
     val raw = pd.markdownToHtml(_in)
 
     val res = Html5.parse("<html><head><title>I eat yaks</title></head><body>"+raw+"</body></html>")

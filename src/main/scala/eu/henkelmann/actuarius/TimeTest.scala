@@ -1,0 +1,151 @@
+package eu.henkelmann.actuarius
+
+    /*
+    Actuarius
+    Copyright © 2010, Christoph Henkelmann
+    http://henkelmann.eu/
+    All rights reserved.
+
+    Redistribution and use in source and binary forms, with or without modification,
+    are permitted provided that the following conditions are met:
+
+    - Redistributions of source code must retain the above copyright notice,
+    this list of conditions and the following disclaimer.
+
+    - Redistributions in binary form must reproduce the above copyright notice,
+    this list of conditions and the following disclaimer in the documentation
+    and/or other materials provided with the distribution.
+
+    - Neither the name “Actuarius”, nor the names of its contributors
+    may be used to endorse or promote products derived from this software without
+    specific prior written permission.
+
+    This software is provided by the copyright holders and contributors “as is” and
+    any express or implied warranties, including, but not limited to, the implied
+    warranties of merchantability and fitness for a particular purpose are disclaimed.
+    In no event shall the copyright owner or contributors be liable for any direct,
+    indirect, incidental, special, exemplary, or consequential damages
+    (including, but not limited to, procurement of substitute goods or services;
+    loss of use, data, or profits; or business interruption) however caused and on any
+    theory of liability, whether in contract, strict liability, or tort
+    (including negligence or otherwise) arising in any way out of the use of this software,
+    even if advised of the possibility of such damage.
+
+    */
+
+import java.io.{InputStreamReader, FileInputStream, StringWriter}
+
+/**
+ * Quick and dirty test for measuring the time of this Parser.
+ * Contains hardcoded file paths, just ignore this, it will be removed soon.
+ */
+
+trait TimedTransformer {
+
+    /**
+     * Overwrite this method to return a custom decorator if you want modified output.
+     */
+    def deco():Decorator = Decorator
+
+    private object lineTokenizer extends LineTokenizer {
+        override def allowXmlBlocks() = TimedTransformer.this.deco().allowVerbatimXml()
+    }
+    private object blockParser extends BlockParsers {
+        override def deco() = TimedTransformer.this.deco()
+    }
+
+    /**
+     * This is the method that turns markdown source into xhtml.
+     */
+    def apply(s:String) = {
+
+        //first, run the input through the line parser
+        val (ms1,lineReader:MarkdownLineReader) = TimeTest.executionTime(()=>lineTokenizer.tokenize(s))
+
+        //then, run it through the block parser
+        val (ms2, result) = TimeTest.executionTime(()=>blockParser(lineReader))
+        println("lines=" + ms1 + ", blocks=" + ms2)
+        result
+    }
+}
+
+
+
+object TimeTest {
+    private object actuariusProcessor extends TimedTransformer()
+
+    private def readFile(path:String):String  = {
+        //read from system input stream
+        val reader = new InputStreamReader(new FileInputStream(path))
+        val writer = new StringWriter()
+        val buffer = new Array[Char](1024)
+		var read = reader.read(buffer)
+		while (read != -1) {
+			writer.write(buffer, 0, read)
+			read = reader.read(buffer)
+		}
+        //turn read input into a string
+        writer.toString
+    }
+
+    def executionTime[T](f:(()=>T)):(Long, T) = {
+        val start = System.currentTimeMillis
+        val t = f()
+        val end = System.currentTimeMillis
+        (end - start, t)
+    }
+
+    private def runActuarius(markdown:String, iterations:Int) {
+        for (i <- 0 until iterations) actuariusProcessor(markdown)
+    }
+
+
+    def testRun(markdown:String, iterations:Int) {
+        println("Running Actuarius " + iterations + " times...")
+        println("... took " + (executionTime(() => runActuarius(markdown, iterations)))._1 + "ms")
+    }
+
+    object testParser extends BaseParsers {
+        //def ws1:Parser[String] = """( |\t|\v)+""".r
+        def ws2:Parser[String] = rep1(elem(' ') | elem('\t') | elem('\u000B')) ^^ {_.mkString}
+
+        def runParser(s:String, p:Parser[String], iterations:Int) {
+            for (i <- 0 until iterations) {
+                apply(p, s)
+            }
+        }
+    }
+
+    def runActuarius = {
+        val markdown = readFile("/home/chris/sbt_projects/markdown_race/test.txt").mkString*100
+        val iterations = 10
+        println("==== First run to warm up the VM: ====")
+        testRun(markdown, iterations)
+        println("==== Second run, JIT compiler should be done now: ====")
+        testRun(markdown, iterations)
+    }
+
+    def runWs = {
+        val wsString = " " * 1000
+        val iterations = 100000
+        println("Running ws...")
+        println("...took " + executionTime (() => testParser.runParser(wsString, testParser.ws, iterations))._1 + "ms")
+        //println("Running ws1...")
+        //println("...took " + executionTime (() => testParser.runParser(wsString, testParser.ws, iterations)))
+        println("Running ws2...")
+        println("...took " + executionTime (() => testParser.runParser(wsString, testParser.ws2, iterations))._1 + "ms")
+
+    }
+
+    def main(args:Array[String]) {
+        /*
+        val markdown = readFile("/home/chris/sbt_projects/markdown_race/test.txt").mkString*100
+        val iterations = 10
+        println("==== First run to warm up the VM: ====")
+        testRun(markdown, iterations)
+        println("==== Second run, JIT compiler should be done now: ====")
+        testRun(markdown, iterations)*/
+        //runWs
+        runActuarius
+    }
+}

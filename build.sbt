@@ -36,6 +36,7 @@ libraryDependencies ++= {
 
 libraryDependencies ++= {
   Seq(
+    "org.scalatest" %% "scalatest" % "1.8" % "test" withSources(),
     "org.apache.tika" % "tika-parsers" % "1.1",
     "junit" % "junit" % "4.7" % "test",
     "ch.qos.logback" % "logback-classic" % "1.0.6" % "compile" ,
