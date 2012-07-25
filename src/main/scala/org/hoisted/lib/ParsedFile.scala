@@ -10,6 +10,7 @@ import java.io._
 import org.joda.time.{DateTimeZone, DateTime}
 import org.joda.time.format.{DateTimeFormatter, ISODateTimeFormat, DateTimeFormat}
 import collection.mutable.ListBuffer
+import java.util.Locale
 
 /**
  * Created with IntelliJ IDEA.
@@ -28,6 +29,8 @@ object ParsedFile {
   lazy val w3cDateTimeFormat = DateTimeFormat.forPattern("yyyy-MM-dd'T'HH:mm:ssZ")
 
   object CurrentTimeZone extends ThreadGlobal[DateTimeZone]
+
+  object CurrentLocale extends ThreadGlobal[Locale]
 
   lazy val dateFormats = List(DateTimeFormat.forPattern("EEE, dd MMM yyyy HH:mm:ss Z"),
     DateTimeFormat.forPattern("yyyy-MM-dd HH:mm:ss Z"),
@@ -53,11 +56,22 @@ object ParsedFile {
     DateTimeFormat.shortDateTime(),
     DateTimeFormat.shortDate()).toStream
 
-  def parseDate(str: String): Box[DateTime] = {
-    val mod: DateTimeFormatter => DateTimeFormatter = CurrentTimeZone.box match {
-      case Full(tz) => ((f: DateTimeFormatter) => f.withZone(tz))
+  /**
+   * Create a function that takes a DateTimeFormatter and updates it based on the
+   * locale and timezone in CurrentLocale and CurrentTimezone
+   * @return
+   */
+  def fixDateTimeFormatter: DateTimeFormatter => DateTimeFormatter =
+    (CurrentTimeZone.box, CurrentLocale.box) match {
+      case (Full(tz), Full(locale)) => ((f: DateTimeFormatter) => f.withZone(tz).withLocale(locale))
+      case (Full(tz), _) => ((f: DateTimeFormatter) => f.withZone(tz))
+      case (_, Full(locale)) => ((f: DateTimeFormatter) => f.withLocale(locale))
       case _ => f => f
     }
+
+  def parseDate(str: String): Box[DateTime] = {
+    val mod: DateTimeFormatter => DateTimeFormatter = fixDateTimeFormatter
+
     dateFormats.flatMap(f => tryo(mod(f).parseDateTime(str))).headOption
   }
 

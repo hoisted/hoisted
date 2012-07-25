@@ -44,7 +44,7 @@ object BaseSnippets {
         }
 
         posts.map(post =>
-        "@post-date *" #> DateTimeFormat.longDate().print(e2.computeDate(post)) &
+        "@post-date *" #> env.dateFormatter.print(e2.computeDate(post)) &
         "@post-title *" #> e2.computeTitle(post) & "@post-title [href]" #> e2.computeLink(post))
       })
     })
@@ -242,7 +242,7 @@ object BaseSnippets {
       if (!descending) sortFunc1 else (a, b) => !sortFunc1(a, b)
 
     val sorted = pages.sortWith(sortFunc)
-    val f = DateTimeFormat.shortDate()
+    val f = env.dateFormatter
 
     ("data-post=item" #> sorted.map {
       p =>
@@ -373,12 +373,18 @@ object BaseSnippets {
   }
 
   def pageInfo: NodeSeq => NodeSeq = ns => {
-    val name = S.attr("name") or S.attr("info")
+    val name = (S.attr("name") or S.attr("info")).map(_.trim.toLowerCase)
 
-    val data: Box[NodeSeq] = name.map(MetadataKey(_)).flatMap(CurrentFile.value.findData(_)).flatMap(data =>
+    val nameDateThing: Box[NodeSeq] = name match {
+      case Full("title") => Full(Text(env.computeTitle(CurrentFile.value)))
+      case Full("date") => Full(Text(env.dateFormatter.print(env.computeDate(CurrentFile.value))))
+      case _ => Empty
+    }
+
+    val data: Box[NodeSeq] = nameDateThing or name.map(MetadataKey(_)).flatMap(CurrentFile.value.findData(_)).flatMap(data =>
       data.asListString.map(a => Text(a.mkString(", ")): NodeSeq) or
         data.asNodeSeq or data.asString.map(a => Text(a): NodeSeq) or
-        data.asDate.map(d => Text(DateTimeFormat.longDate().print(d)): NodeSeq))
+        data.asDate.map(d => Text(env.dateFormatter.print(d)): NodeSeq))
 
     ns match {
       case e: Elem => ("* *" #> data).apply(e)
@@ -404,7 +410,7 @@ object BaseSnippets {
 
     val m = HoistedEnvironmentManager.value
 
-    val f = DateTimeFormat.shortDate()
+    val f = env.dateFormatter
 
     ("data-post=item" #> posts.map {
       p =>

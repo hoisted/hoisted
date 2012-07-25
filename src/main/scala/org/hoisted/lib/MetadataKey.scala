@@ -240,6 +240,11 @@ case object HideIfKey extends MetadataKey {
   def key = "hide-if"
 }
 
+case object DateFormatKey extends MetadataKey {
+  def global = true
+  def key = "date-format"
+}
+
 object MetadataKey {
   lazy val knownKeys = List(OrderKey, OutputPathKey, TemplateURLKey, SiteNameKey, LinkKey,
     TitleKey, TemplateKey, ServeKey,
@@ -249,8 +254,7 @@ object MetadataKey {
     HasBlogKey, TagsKey, AliasKey, HTagBodyKey,
     ValidFromKey, ValidToKey, EventKey, PostKey, LayoutKey, RedirectKey,
   MenuLocGroupKey, MenuIconKey, MenuIconPlacementKey,
-  ShowIfKey, HideIfKey
-  )
+  ShowIfKey, HideIfKey, DateFormatKey)
 
   def apply(s: String): MetadataKey = {
     val (_s, top) = if (s.startsWith("!")) (s.substring(1), true) else (s, false)

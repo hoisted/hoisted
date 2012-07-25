@@ -12,7 +12,7 @@ import org.joda.time.DateTime
 import org.eclipse.jgit.api.Git
 import java.io.{PrintWriter, OutputStream, File}
 import xml.{Node, NodeSeq}
-import org.joda.time.format.ISODateTimeFormat
+import org.joda.time.format.{DateTimeFormat, DateTimeFormatter, ISODateTimeFormat}
 
 /**
  * Created with IntelliJ IDEA.
@@ -453,6 +453,17 @@ trait EnvironmentManager {
   }
 
   def w3cFormattedDate: ParsedFile => String = pf => ParsedFile.w3cDateTimeFormat.print(computeDate(pf))
+
+  /**
+   * Make a date time formatter
+   * @return
+   */
+  lazy val dateFormatter: DateTimeFormatter =
+    ParsedFile.fixDateTimeFormatter((for {
+      fm <- findMetadata(DateFormatKey)
+      str <- fm.asString
+      fmt <- Helpers.tryo(DateTimeFormat.forPattern(str.trim))
+    } yield fmt) openOr DateTimeFormat.longDate())
 
   def syntheticFiles: () => Seq[ParsedFile] = () => {
     val bpSynt: List[ParsedFile] =
