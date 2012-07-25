@@ -11,10 +11,6 @@ import JsCmds._
 import org.joda.time.format.{DateTimeFormat}
 import collection.mutable.ListBuffer
 import scala.xml
-import java.net.{URLEncoder, URI}
-import org.apache.http.client.methods.HttpGet
-import org.apache.http.impl.client.DefaultHttpClient
-import org.apache.http.HttpResponse
 
 
 /**
@@ -391,6 +387,18 @@ object BaseSnippets {
   }
 
 
+  def simplyBlogPosts: NodeSeq => NodeSeq = ignore =>
+    <ul class="posts" style="list-style: none" data-lift="blog.posts?max=15">
+      <li data-post="item"><h2><a data-post="link" href="#">Blog Post</a></h2>
+        <h4 style="padding-left: 8px;"><span data-post="date">2012/12/14</span> </h4>
+        <div style="padding-left: 15px;" data-post="shortcontent">
+          Post Content goes here
+        </div>
+        <div data-post="more"><a href="#">Read More...</a></div>
+        <hr/>
+        </li>
+      </ul>
+
   def blogPosts: NodeSeq => NodeSeq = {
     val posts = HoistedEnvironmentManager.value.blogPosts.take(S.attr("max").flatMap(Helpers.asInt _) openOr Integer.MAX_VALUE)
 
@@ -412,11 +420,31 @@ object BaseSnippets {
   }
 
   def testAttr(in: NodeSeq): NodeSeq = {
-    for {
-      toTest <- S.attr("toTest").toList
-      attr <- S.attr(toTest).toList if attr == "true"
-      node <- in
-    } yield node
+    (S.attr("toTest") or S.attr("totest") or S.attr("to_test"), S.attr("extra"), S.attr("extra_true"), S.attr("extra_eq")) match {
+      case (Full(toTest), _, _, _) =>
+        for {
+          attr <- S.attr(toTest).toList if attr == "true"
+          node <- in
+        } yield node
+
+      case (_, Full(extra), _, _) =>
+        val key = MetadataKey(extra.toLowerCase)
+        (CurrentFile.value.findData(key) or env.findMetadata(key)).
+          map(ignore => in) openOr Nil
+
+      case (_, _, Full(extraInfo), _) =>
+        val key = MetadataKey(extraInfo.toLowerCase)
+        (CurrentFile.value.findData(key).flatMap(_.asBoolean) or env.findMetadata(key).flatMap(_.asBoolean)).
+          filter(v => v).map(ignore => in) openOr Nil
+
+      case (_, _, _, Full(extraEq)) =>
+        val key = MetadataKey(extraEq.toLowerCase)
+        (CurrentFile.value.findData(key).flatMap(_.forceListString.headOption) or
+          env.findMetadata(key).flatMap(_.forceListString.headOption)).
+          filter(v => Full(v.trim.toLowerCase) == S.attr("value").map(_.trim.toLowerCase)).map(ignore => in) openOr Nil
+
+      case _ => Nil
+    }
   }
 
 
@@ -451,20 +479,3 @@ object BootstrapUtil {
                         <![endif]-->""")
 }
 
-
-object HttpFetch {
-  def get[T](url: String, params: Seq[(String, String)] = Nil, headers: Seq[(String, String)] = Nil, encoding: String = "UTF-8")(f: HttpResponse => T): T = {
-    val qs = params.map{
-      case (n,v) => URLEncoder.encode(n, encoding) +"="+ URLEncoder.encode(v, encoding)
-    }.mkString("&")
-    val client = new DefaultHttpClient()
-
-    val x = new HttpGet(new URI(if(params.isEmpty) url else url + "?" + qs))
-    headers.foreach{
-      case (h,v) => x.addHeader(h, v)
-    }
-
-    f(client.execute(x))
-  }
-
-}

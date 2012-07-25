@@ -79,15 +79,24 @@ trait HoistedRenderer {
           fileInfo <- tryo(allFiles.map(fileInfo(inDir)))
           __parsedFiles = (fileInfo: List[FileInfo]).flatMap(ParsedFile.apply _)
           _ = env.allPages = __parsedFiles
-          _parsedFiles = __parsedFiles.filter(HoistedEnvironmentManager.value.isValid)
-          parsedFiles = ensureTemplates(_parsedFiles)
+          _parsedFiles = __parsedFiles.filter(env.isValid)
+          parsedFilesPrime = ensureTemplates(_parsedFiles)
+
+          _ = {
+            if (env.hasBlogPosts(parsedFilesPrime)) {
+              env.appendMetadata(HasBlogKey, BooleanMetadataValue(true))
+            }
+          }
+
+          parsedFiles = env.filterBasedOnMetadata(parsedFilesPrime)
 
           _ = HoistedEnvironmentManager.value.pages = parsedFiles
 
+
           fileMap = byName(parsedFiles)
           templates = createTemplateLookup(parsedFiles)
-          menu = HoistedEnvironmentManager.value.computeMenuItems(parsedFiles)
-          _ = HoistedEnvironmentManager.value.menuEntries = menu
+          menu = env.computeMenuItems(parsedFiles)
+          _ = env.menuEntries = menu
 
           posts = HoistedEnvironmentManager.value.computePosts(parsedFiles)
           _ = HoistedEnvironmentManager.value.blogPosts = posts

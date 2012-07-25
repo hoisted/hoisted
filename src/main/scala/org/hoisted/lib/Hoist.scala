@@ -1,5 +1,7 @@
 package org.hoisted.lib
 
+import java.io.File
+
 /**
  * Created with IntelliJ IDEA.
  * User: dpp
@@ -10,6 +12,9 @@ package org.hoisted.lib
 
 object Hoist {
   def main(args: Array[String]) {
-    println("FIXME -- run Hoisted with params "+args.mkString(", "))
+    args.toList match {
+      case from :: to :: Nil => RunHoisted(new File(from), new File(to))
+      case _ => "Usage 'java -jar hoisted.jar source_directory destination_directory"
+    }
   }
 }

@@ -230,8 +230,15 @@ case object MenuIconPlacementKey extends MetadataKey {
   def key = "menu-icon-placement"
 }
 
+case object ShowIfKey extends MetadataKey {
+  def global = false
+  def key = "show-if"
+}
 
-
+case object HideIfKey extends MetadataKey {
+  def global = false
+  def key = "hide-if"
+}
 
 object MetadataKey {
   lazy val knownKeys = List(OrderKey, OutputPathKey, TemplateURLKey, SiteNameKey, LinkKey,
@@ -241,7 +248,8 @@ object MetadataKey {
     CategoryKey, NoSyntheticRssFile,
     HasBlogKey, TagsKey, AliasKey, HTagBodyKey,
     ValidFromKey, ValidToKey, EventKey, PostKey, LayoutKey, RedirectKey,
-  MenuLocGroupKey, MenuIconKey, MenuIconPlacementKey
+  MenuLocGroupKey, MenuIconKey, MenuIconPlacementKey,
+  ShowIfKey, HideIfKey
   )
 
   def apply(s: String): MetadataKey = {

@@ -103,6 +103,7 @@ trait EnvironmentManager {
       ("page_info", "render") -> Full(BaseSnippets.pageInfo),
       ("pageinfo", "render") -> Full(BaseSnippets.pageInfo),
       ("blog", "posts") -> Full(BaseSnippets.blogPosts),
+      ("blog", "simple") -> Full(BaseSnippets.simplyBlogPosts),
       ("move_top", "render") -> Full(BaseSnippets.moveTop),
       ("twitter", "render") -> Full(BaseSnippets.doTwitter),
       ("search", "render") -> Full(BaseSnippets.search),
@@ -230,7 +231,7 @@ trait EnvironmentManager {
    */
   def hasBlogPosts: List[ParsedFile] => Boolean =
     pf =>
-      (findBoolean(HasBlogKey, metadata) or findString(BlogRootKey, metadata).map(_ => true)) openOr
+      (findBoolean(HasBlogKey, metadata)) /*or findString(BlogRootKey, metadata).map(_ => true))*/ openOr
         pf.toStream.flatMap(pf => pf.findData(PostKey).flatMap(_.asBoolean).filter(a => a)).headOption.isDefined
 
   def computeBlogRoot: () => String = () => findString(BlogRootKey, metadata) openOr "/blog"
@@ -540,16 +541,28 @@ trait EnvironmentManager {
     pf.findData(DateKey).flatMap(_.asDate), pf.findData(ValidToKey).flatMap(_.asDate))
 
   def isValid: ParsedFile => Boolean = pf => {
-    def computeValidFrom: Boolean =
-      pf.findData(ValidFromKey).flatMap(_.asDate).map(_.getMillis < Helpers.millis) or
-        pf.findData(DateKey).flatMap(_.asDate).map(_.getMillis < Helpers.millis) or
+    pf.findData(ServeKey).flatMap(_.asBoolean).filter(v => !v) openOr {
+      def computeValidFrom: Boolean =
+        pf.findData(ValidFromKey).flatMap(_.asDate).map(_.getMillis < Helpers.millis) or
+          pf.findData(DateKey).flatMap(_.asDate).map(_.getMillis < Helpers.millis) or
           pf.fileInfo.file.map(_.lastModified() < Helpers.millis) openOr false
 
-    pf.findData(ValidToKey).flatMap(_.asDate).map(_.getMillis > Helpers.millis) match {
-      case Full(true) => computeValidFrom
-      case Full(false) => false
-      case _ => computeValidFrom
+      pf.findData(ValidToKey).flatMap(_.asDate).map(_.getMillis > Helpers.millis) match {
+        case Full(true) => computeValidFrom
+        case Full(false) => false
+        case _ => computeValidFrom
+      }
     }
+  }
+
+  def filterBasedOnMetadata: List[ParsedFile] => List[ParsedFile] = in => in.filter{f =>
+    def test(key: MetadataKey, test: Box[Boolean] => Box[Boolean]): Box[Boolean] = {
+      f.findData(key).flatMap(_.asString).map(_.trim.toLowerCase).map(MetadataKey(_)).
+        flatMap(k =>
+        test((f.findData(k) or findMetadata(k)).flatMap(_.asBoolean)))
+    }
+    test(ShowIfKey, _ or Full(false)) or
+    test(HideIfKey, _.map(v => !v)) openOr true
   }
 }
 
