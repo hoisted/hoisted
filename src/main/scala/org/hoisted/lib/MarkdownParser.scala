@@ -44,7 +44,9 @@ object MarkdownParser {
     val (_in, retPairs) = readTopMetadata(in)
 
     val pd = new PegDownProcessor(Extensions.FENCED_CODE_BLOCKS | Extensions.QUOTES | Extensions.SMARTYPANTS)
-    val raw = pd.markdownToHtml(_in)
+    val raw = pd.markdownToHtml(
+      _in.replace("![](", "![ ](") // Fixes #8 -- change when we change from Pegdown processor
+    )
 
     val res = Html5.parse("<html><head><title>I eat yaks</title></head><body>"+raw+"</body></html>")
 
