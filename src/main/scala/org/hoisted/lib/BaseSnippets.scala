@@ -11,6 +11,7 @@ import JsCmds._
 import org.joda.time.format.{DateTimeFormat}
 import collection.mutable.ListBuffer
 import scala.xml
+import java.net.URLEncoder
 
 
 /**
@@ -21,14 +22,20 @@ import scala.xml
  * To change this template use File | Settings | File Templates.
  */
 
-object BaseSnippets {
-  lazy val months = Array("January", "February", "March", "April",
-  "May", "June", "July", "August", "September", "October",
-  "November", "December")
-
+object BaseSnippets extends LazyLoggable {
   def archivedPosts: NodeSeq => NodeSeq = {
     val e2 = env
     val byYear = e2.blogPosts.filter(e2.isValid).groupBy(a => e2.computeDate(a).getYear)
+
+    val months: Array[String] = {
+      val locale = ParsedFile.CurrentLocale.box openOr java.util.Locale.getDefault
+      val fmt = DateTimeFormat.forPattern("MMMM")
+      val baseDate = new org.joda.time.DateTime()
+
+      (1 to 12).map(i => fmt.print(baseDate.withMonthOfYear(i))).toArray
+    }
+
+    val fmt = env.dateFormatter
 
     ClearClearable andThen "@year-block" #> byYear.keys.
       toList.sortWith(_ > _).
@@ -44,7 +51,9 @@ object BaseSnippets {
         }
 
         posts.map(post =>
-        "@post-date *" #> env.dateFormatter.print(e2.computeDate(post)) &
+        "@post-date *" #> fmt.print(e2.computeDate(post)) &
+        "@post-title [data-hoisted-type]" #> "post" &
+        "@post-title [data-hoisted-slug]" #> env.computeSlug(post) &
         "@post-title *" #> e2.computeTitle(post) & "@post-title [href]" #> e2.computeLink(post))
       })
     })
@@ -250,6 +259,8 @@ object BaseSnippets {
 
         "data-post=link [href]" #> env.computeLink(p) &
           "data-post=link *" #> env.computeLinkText(p) &
+          "data-post=link [data-hoisted-type]" #> by &
+          "data-post=link [data-hoisted-slug]" #> env.computeSlug(p) &
           "data-post=shortcontent" #> short &
           (if (more) ("data-post=more" #> ("a [href]" #> env.computeLink(p))) else "data-post=more" #> (Empty: Box[String])) &
           "data-post=content" #> env.computeContent(p) &
@@ -394,7 +405,8 @@ object BaseSnippets {
 
 
   def simplyBlogPosts: NodeSeq => NodeSeq = ignore =>
-    <ul class="posts" style="list-style: none" data-lift="blog.posts?max=15">
+    S.withAttrs("max" -> "15")(blogPosts(
+    <ul class="posts" style="list-style: none">
       <li data-post="item"><h2><a data-post="link" href="#">Blog Post</a></h2>
         <h4 style="padding-left: 8px;"><span data-post="date">2012/12/14</span> </h4>
         <div style="padding-left: 15px;" data-post="shortcontent">
@@ -403,7 +415,7 @@ object BaseSnippets {
         <div data-post="more"><a href="#">Read More...</a></div>
         <hr/>
         </li>
-      </ul>
+      </ul>))
 
   def blogPosts: NodeSeq => NodeSeq = {
     val posts = HoistedEnvironmentManager.value.blogPosts.take(S.attr("max").flatMap(Helpers.asInt _) openOr Integer.MAX_VALUE)
@@ -417,6 +429,8 @@ object BaseSnippets {
         val (short, more) = m.computeShortContent(p)
 
         "data-post=link [href]" #> m.computeLink(p) &
+          "data-post=link [data-hoisted-type]" #> "post" &
+          "data-post=link [data-hoisted-slug]" #> env.computeSlug(p) &
           "data-post=link *" #> m.computeLinkText(p) &
           "data-post=shortcontent" #> short &
           (if (more) ("data-post=more" #> ("a [href]" #> m.computeLink(p))) else "data-post=more" #> (Empty: Box[String])) &
@@ -471,6 +485,87 @@ object BaseSnippets {
     }
 
     NodeSeq.Empty
+  }
+
+  def googleMap: NodeSeq => NodeSeq = ns => {
+    (S.attr("address") or S.attr("where") or ns.toList.collect{case e: Elem => e}.headOption.flatMap(_.attribute("data-address").map(_.text))) match {
+      case Full(where) =>
+        <iframe width={S.attr("width") openOr "640"} height={S.attr("height") openOr "480"} frameborder="0" scrolling="no" marginheight="0" marginwidth="0" src={
+        "http://maps.google.com/maps?q="+URLEncoder.encode(where, "UTF-8")+"&output=embed"
+        }></iframe>
+
+      case _ =>
+        logger.warn("'google.map' snippet invoked, but no 'address' or 'where' parameter specified")
+        ns
+    }
+  }
+
+  def disqusCount: NodeSeq => NodeSeq = ns => {
+    S.attr("shortname") match {
+      case Full(acct) =>
+
+        val xf = "data-hoisted-type=post [href+]" #> "#disqus_thread"
+
+        PostPageTransforms.set(PostPageTransforms.get :+ xf)
+
+
+        <tail>
+    <script type="text/javascript">
+      {
+      Unparsed("""
+      // <![CDATA[
+      /* * * CONFIGURATION VARIABLES: EDIT BEFORE PASTING INTO YOUR WEBPAGE * * */
+      var disqus_shortname = """ + acct.encJs + """; // required: replace example with your forum shortname
+
+      /* * * DON'T EDIT BELOW THIS LINE * * */
+      (function () {
+      var s = document.createElement('script'); s.async = true;
+    s.type = 'text/javascript';
+    s.src = 'https://' + disqus_shortname + '.disqus.com/count.js';
+    (document.getElementsByTagName('HEAD')[0] || document.getElementsByTagName('BODY')[0]).appendChild(s);
+    }());
+    // ]]>
+    """)}
+    </script>
+    </tail>
+
+      case _ =>
+        logger.warn("'disqus.count' snippet invoked, but no 'shortname' parameter specified")
+        ns
+    }
+  }
+
+  def disqus: NodeSeq => NodeSeq = ns => {
+    S.attr("shortname") match {
+      case Full(acct) =>
+    <xml:group>
+    <div id="disqus_thread"></div>
+      <script type="text/javascript">
+        {
+        Unparsed("""
+
+        // <![CDATA[
+        /* * * CONFIGURATION VARIABLES: EDIT BEFORE PASTING INTO YOUR WEBPAGE * * */
+        var disqus_shortname = """ + acct.encJs + """
+
+        /* * * DON'T EDIT BELOW THIS LINE * * */
+        (function() {
+        var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+    dsq.src = 'https://' + disqus_shortname + '.disqus.com/embed.js';
+    (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    })();
+    // ]]>
+    """)}
+    </script>
+    <noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+      <a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+    </xml:group>
+
+      case _ =>
+        logger.warn("'disqus' snippet invoked, but no 'shortname' parameter specified")
+        ns
+
+  }
   }
 }
 

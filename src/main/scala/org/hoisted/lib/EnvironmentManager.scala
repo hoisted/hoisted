@@ -110,7 +110,10 @@ trait EnvironmentManager {
       ("htag-list", "render") -> Full(BaseSnippets.hTags),
       ("htag_list", "render") -> Full(BaseSnippets.hTags),
       ("bootstraputil", "headcomment") -> Full((ignore: NodeSeq) => BootstrapUtil.headComment),
-      ("bootstraputil", "bodycomment") -> Full((ignore: NodeSeq) => BootstrapUtil.bodyComment)
+      ("bootstraputil", "bodycomment") -> Full((ignore: NodeSeq) => BootstrapUtil.bodyComment),
+      ("disqus", "render") -> Full(BaseSnippets.disqus),
+      ("disqus", "count") -> Full(BaseSnippets.disqusCount),
+      ("google", "map") -> Full(BaseSnippets.googleMap)
     ).withDefaultValue(Empty)
 
     new PartialFunction[(String, String), Box[NodeSeq => NodeSeq]] {
@@ -563,6 +566,25 @@ trait EnvironmentManager {
         case Full(false) => false
         case _ => computeValidFrom
       }
+    }
+  }
+
+  def computeSlug: ParsedFile => String = pf =>
+    slugify(pf.findData(OutputPathKey).flatMap(_.asString) openOr computeOutputFileName(pf))
+
+  lazy val safe = """[^\w]""".r
+
+  lazy val noLeadingDash = """^(\-)+""".r
+  lazy val notrailingDash = """(\-)+$""".r
+
+  def slugify: String => String = in => {
+
+    val r1 = safe.replaceAllIn(in.trim.toLowerCase, "-")
+
+    val r2 = noLeadingDash.replaceAllIn(r1, "")
+    notrailingDash.replaceAllIn(r2, "") match {
+      case "" => "x"
+      case s => s
     }
   }
 

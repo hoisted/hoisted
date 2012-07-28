@@ -231,15 +231,38 @@ res0: net.liftweb.common.Box[org.hoisted.lib.HoistedTransformMetaData] = Full(Ho
     def morphIt(in: NodeSeq): (NodeSeq, MetadataMeta.Metadata) = {
       val lb = new ListBuffer[(Int, String, NodeSeq)]
 
+      var ids: Set[String] = Set()
+
+      def slugify(in: String): String = {
+      val safe = """[^\w]""".r
+      val r1 = safe.replaceAllIn(in.trim.toLowerCase, "-")
+        val noLeadingDash = """^(\-)+""".r
+        val notrailingDash = """(\-)+$""".r
+        val r2 = noLeadingDash.replaceAllIn(r1, "")
+        notrailingDash.replaceAllIn(r2, "") match {
+          case "" => "x"
+          case s => s
+        }
+      }
+
+      def computeIdFor(in: NodeSeq, seq: Int = 1): String = {
+        val toTest = slugify(in.text)
+        if (!ids.contains(toTest)) toTest
+        else if (!ids.contains(toTest+"_"+seq)) toTest+"_"+seq
+        else computeIdFor(in, seq + 1)
+      }
+
       val res = in.map {
         case GetHeader(i, e, body) =>
           val id = e.attribute("id")
           if (id.isDefined) {
+            ids += id.get.text
             lb.append((i ,id.get.text, body))
             e
           } else {
             import Helpers._
-            val i2 = Helpers.nextFuncName
+            val i2 = computeIdFor(body)
+            ids += i2
             lb.append((i, i2, body))
             e % ("id" -> i2)
           }
