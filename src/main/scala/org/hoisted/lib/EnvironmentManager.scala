@@ -370,15 +370,6 @@ trait EnvironmentManager {
         }
       }
 
-      /**
-       * The serve key should not be applied to stuff in /templates-hidden
-       */
-      fi.pathAndSuffix.path match {
-        case "templates-hidden" :: _ if fixedMd.contains(ServeKey) =>
-          fixedMd -= ServeKey
-        case _ =>
-      }
-
       // test to see if it's an event
       findBoolean(EventKey, fixedMd) match {
         case Full(_) => // do nothing
@@ -564,7 +555,7 @@ trait EnvironmentManager {
     pf.findData(DateKey).flatMap(_.asDate), pf.findData(ValidToKey).flatMap(_.asDate))
 
   def isValid: ParsedFile => Boolean = pf => {
-    pf.findData(ServeKey).flatMap(_.asBoolean).filter(v => !v) openOr {
+    /* pf.findData(ServeKey).flatMap(_.asBoolean).filter(v => !v) openOr */ {
       def computeValidFrom: Boolean =
         pf.findData(ValidFromKey).flatMap(_.asDate).map(_.getMillis < Helpers.millis) or
           pf.findData(DateKey).flatMap(_.asDate).map(_.getMillis < Helpers.millis) or
