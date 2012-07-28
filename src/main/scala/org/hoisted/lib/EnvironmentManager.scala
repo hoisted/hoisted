@@ -370,6 +370,15 @@ trait EnvironmentManager {
         }
       }
 
+      /**
+       * The serve key should not be applied to stuff in /templates-hidden
+       */
+      fi.pathAndSuffix.path match {
+        case "templates-hidden" :: _ if fixedMd.contains(ServeKey) =>
+          fixedMd -= ServeKey
+        case _ =>
+      }
+
       // test to see if it's an event
       findBoolean(EventKey, fixedMd) match {
         case Full(_) => // do nothing

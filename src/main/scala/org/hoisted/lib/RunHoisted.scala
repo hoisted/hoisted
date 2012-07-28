@@ -43,7 +43,7 @@ object VeryTesty {
       configurator.doConfigure(is)
     })
 
-    RunHoisted(new File("/Users/dpp/tmp/blog2"), new File("/Users/dpp/tmp/outfrog")).map(_.logs)
+    RunHoisted(new File("/Users/dpp/tmp/peters_site"), new File("/Users/dpp/tmp/outfrog")).map(_.logs)
   }
 }
 
