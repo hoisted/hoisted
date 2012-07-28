@@ -79,37 +79,52 @@ object BaseSnippets extends LazyLoggable {
       (a.findData(OrderKey).flatMap(_.asInt) openOr 0) <
         (b.findData(OrderKey).flatMap(_.asInt) openOr 0)
     )
-
-    def buildLink(p: ParsedFile): NodeSeq =
-      p.findData(MenuIconKey).map(_.forceListString) match {
-        case Full(ls) =>
-          def icon = <i class={ls.mkString(" ")}></i>
-          p.findData(MenuIconPlacementKey).flatMap(_.asString).map(_.toLowerCase()) match {
-            case Full("right") => <span>{env.computeLinkText(p)}{icon}</span>
-            case _ => <span>{icon}{env.computeLinkText(p)}</span>
-          }
-        case _ => Text(env.computeLinkText(p))
+    
+    def buildLink(p: ParsedFile): NodeSeq = {     
+      def buildIconLink(ls: List[String]): NodeSeq = {
+        def buildIconLeftLink: NodeSeq =  <span>{icon}{env.computeLinkText(p)}</span>
+        def buildIconRightLink: NodeSeq = <span>{env.computeLinkText(p)}{icon}</span>   
+        def icon = <i class={ls.mkString(" ")}></i>
+        p.findData(MenuIconPlacementKey).flatMap(_.asString).map(_.toLowerCase()) match {
+          case Full("right") => buildIconRightLink 
+          case _ => buildIconLeftLink 
+        }      
       }
-
+      def builTextdLink: NodeSeq =  Text(env.computeLinkText(p))    
+      p.findData(MenuIconKey).map(_.forceListString) match {
+        case Full(ls) => buildIconLink(ls)
+        case _ => builTextdLink 
+      }
+    }    
+    
+    def buildMenuDivider(p: ParsedFile): NodeSeq = {
+      def buildWithMenuDivider(ls: List[String]): NodeSeq = <li class={ls.mkString(" ")}></li> 
+      p.findData(MenuDividerKey).map(_.forceListString) match {
+        case Full(ls) => buildWithMenuDivider(ls)    
+        case _ =>  NodeSeq.Empty
+      }
+    }  
+    
     if ((ns \\ "item").filter {
       case e: Elem => e.prefix == "menu"
       case _ => false
     }.isDefined) {
-      sorted.flatMap(fr =>
-        bind("menu", ns, "item" -> buildLink(fr),
+      sorted.flatMap(fr =>        
+        bind("menu", ns, "item" -> buildLink(fr), "divider" -> buildMenuDivider(fr),
           FuncAttrOptionBindParam("class", (value: NodeSeq) =>
             if (fr eq CurrentFile.value) Some(value) else None, "class"),
           AttrBindParam("href", env.computeLink(fr), "href"))
-      )
+      )  
     } else {
       ("*" #> sorted.map(fr =>
+        "@divider *" #> buildMenuDivider(fr) &
         "a [href]" #> env.computeLink(fr) &
           "a *" #> buildLink(fr) andThen
           (if (fr eq CurrentFile.value)
             ("* [class+]" #> activeClass)
           else
             PassThru))).apply(ns)
-    }
+    }  
   }
 
   def doTitle(ns: NodeSeq): NodeSeq = <head><title>{
