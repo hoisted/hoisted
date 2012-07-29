@@ -519,7 +519,12 @@ object BaseSnippets extends LazyLoggable {
     S.attr("shortname") match {
       case Full(acct) =>
 
-        val xf = "data-hoisted-type=post [href+]" #> "#disqus_thread"
+        val xf = "data-hoisted-type=post" #> ((ns: NodeSeq) =>
+          ns ++ <small>&nbsp; {
+    <a href={ns.collect{case e: Elem => e}.headOption.flatMap(_.attribute("href").
+      map(a => Text(a.text+"#disqus_thread")))}></a>
+    }</small>
+          )
 
         PostPageTransforms.set(PostPageTransforms.get :+ xf)
 
@@ -530,7 +535,7 @@ object BaseSnippets extends LazyLoggable {
       Unparsed("""
       // <![CDATA[
       /* * * CONFIGURATION VARIABLES: EDIT BEFORE PASTING INTO YOUR WEBPAGE * * */
-      var disqus_shortname = """ + acct.encJs + """; // required: replace example with your forum shortname
+      var disqus_shortname = """ + acct.encJs + """;
 
       /* * * DON'T EDIT BELOW THIS LINE * * */
       (function () {
@@ -561,7 +566,7 @@ object BaseSnippets extends LazyLoggable {
 
         // <![CDATA[
         /* * * CONFIGURATION VARIABLES: EDIT BEFORE PASTING INTO YOUR WEBPAGE * * */
-        var disqus_shortname = """ + acct.encJs + """
+        var disqus_shortname = """ + acct.encJs + """;
 
         /* * * DON'T EDIT BELOW THIS LINE * * */
         (function() {
