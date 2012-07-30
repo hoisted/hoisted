@@ -22,13 +22,15 @@ import org.joda.time.format.{DateTimeFormat, DateTimeFormatter, ISODateTimeForma
  * To change this template use File | Settings | File Templates.
  */
 
-trait EnvironmentManager {
+trait EnvironmentManager extends LazyLoggable {
   private var _metadata: MetadataMeta.Metadata = Map()
   var menuEntries: List[MenuEntry] = Nil
   var blogPosts: List[ParsedFile] = Nil
   var pages: List[ParsedFile] = Nil
   var allPages: List[ParsedFile] = Nil
   def metadata: MetadataMeta.Metadata = _metadata
+
+  private var postRun: Vector[() => Unit] = Vector()
 
   def menuTitle: NodeSeq => NodeSeq =
     "* *+" #> (
@@ -44,6 +46,20 @@ trait EnvironmentManager {
         "a [href]" #> computeLink(pf) &
         "li [class+]" #> Full("active").filter(a => (pf eq CurrentFile.value))
     }
+
+  def addToPostRun(f: () => Unit) {
+    postRun = postRun :+ f
+  }
+
+  def runPostRun() {
+    postRun.foreach(f => logFailure("Post Run")(f()))
+  }
+
+  def logFailure[T](where: => String)(f: => T): Box[T] = {
+    val res = Helpers.tryo(f)
+    HoistedUtil.boxToErrorString(res).foreach(err => logger.error(where+": "+err))
+    res
+  }
 
   /**
    * Finds all the valid pages if they have a tag
@@ -251,7 +267,7 @@ trait EnvironmentManager {
   {
     val cloner = Git.cloneRepository()
     cloner.setURI(url)
-    val dir = File.createTempFile("fog", "dog")
+    val dir = File.createTempFile("telegram_", "_template")
     dir.delete()
     dir.mkdirs()
     cloner.setDirectory(dir)
@@ -262,6 +278,8 @@ trait EnvironmentManager {
     val parsedFiles = fileInfo.flatMap(ParsedFile.apply _)
 
     val curSet = Set(cur.map(_.fileInfo.pathAndSuffix) :_*)
+
+    addToPostRun(() => RunHoisted.deleteAll(dir))
 
     parsedFiles.filter(pf => !curSet.contains(pf.fileInfo.pathAndSuffix)) ::: cur
   }
@@ -465,7 +483,7 @@ trait EnvironmentManager {
     ParsedFile.fixDateTimeFormatter((for {
       fm <- findMetadata(DateFormatKey)
       str <- fm.asString
-      fmt <- Helpers.tryo(DateTimeFormat.forPattern(str.trim))
+      fmt <- logFailure("Getting date for format: "+str)(DateTimeFormat.forPattern(str.trim))
     } yield fmt) openOr DateTimeFormat.longDate())
 
   def syntheticFiles: () => Seq[ParsedFile] = () => {

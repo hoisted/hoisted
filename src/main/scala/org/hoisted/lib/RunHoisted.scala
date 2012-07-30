@@ -5,6 +5,7 @@ import net.liftweb._
 import common._
 import common.Full
 import http._
+import http.LiftRules.{SnippetFailures, SnippetFailure}
 import util._
 import Helpers._
 import java.util.Locale
@@ -59,7 +60,7 @@ object CurrentFile extends ThreadGlobal[ParsedFile]
 
 object PostPageTransforms extends TransientRequestVar[Vector[NodeSeq => NodeSeq]](Vector())
 
-trait HoistedRenderer {
+trait HoistedRenderer extends LazyLoggable {
   @scala.annotation.tailrec
   private def seekInDir(in: File): File = {
     val all = in.listFiles().filter(!_.getName.startsWith(".")).filterNot(_.getName.toLowerCase.startsWith("readme"))
@@ -72,11 +73,11 @@ trait HoistedRenderer {
       HoistedEnvironmentManager.doWith(environment) {
         val inDir = seekInDir(_inDir)
         for {
-          deleteAll <- tryo(deleteAll(outDir))
-          theDir <- tryo(outDir.mkdirs())
-          allFiles <- tryo(allFiles(inDir, f => f.exists() && !f.getName.startsWith(".") && f.getName.toLowerCase != "readme" &&
+          deleteAll <- env.logFailure("Deleting all files in "+outDir)(deleteAll(outDir))
+          theDir <- env.logFailure("Making dir "+outDir)(outDir.mkdirs())
+          allFiles <- env.logFailure("allFiles for "+inDir)(allFiles(inDir, f => f.exists() && !f.getName.startsWith(".") && f.getName.toLowerCase != "readme" &&
             f.getName.toLowerCase != "readme.md"))
-          fileInfo <- tryo(allFiles.map(fileInfo(inDir)))
+          fileInfo <- env.logFailure("File Info for allFiles")(allFiles.map(fileInfo(inDir)))
           __parsedFiles = (fileInfo: List[FileInfo]).flatMap(ParsedFile.apply _)
           _ = env.allPages = __parsedFiles
           _parsedFiles = __parsedFiles.filter(env.isValid)
@@ -111,7 +112,8 @@ trait HoistedRenderer {
           ret
         }
 
-          done <- tryo(writeFiles(transformedFiles, inDir, outDir))
+          done <- env.logFailure("Writing rendered files")(writeFiles(transformedFiles, inDir, outDir))
+          _ = env.runPostRun()
         } yield HoistedTransformMetaData(new String(log.toByteArray), transformedFiles, env.metadata, env, aliases)
       }
     }
@@ -161,8 +163,8 @@ trait HoistedRenderer {
           try {
             pf.writeTo(out)
           } finally {
-            tryo(out.flush())
-            tryo(out.close())
+            env.logFailure("Trying to flush "+pf.pathAndSuffix)(out.flush())
+            env.logFailure("Trying to close "+pf.pathAndSuffix)(out.close())
           }
           // where.setLastModified(env.computeDate(pf).getMillis)
         }
@@ -247,22 +249,39 @@ trait HoistedRenderer {
       val _processed = if ((node \\ "html" \\ "body").length > 0) node
       else {
         val templateName = env.chooseTemplateName(todo)
-        val res = session.processSurroundAndInclude("Chrome", <lift:surround with={templateName} at="content">
+        val res = session.processSurroundAndInclude("Surrounding page "+todo.fileInfo.pathAndSuffix+" with template: "+templateName, <lift:surround with={templateName} at="content">
           {node}
         </lift:surround>)
         res
       }
 
       val _processed1 = PostPageTransforms.get.foldLeft(_processed)((ns, f) => f(ns))
-      val processed =  session.processSurroundAndInclude("Post transforms",env.computeTransforms(todo).foldLeft(_processed1)((ns, f) => f(ns)))
+      val processed =  session.processSurroundAndInclude("Post transforms for "+todo.fileInfo.pathAndSuffix,env.computeTransforms(todo).foldLeft(_processed1)((ns, f) => f(ns)))
 
-      session.processSurroundAndInclude("Post merge transforms",
+      session.processSurroundAndInclude("Post merge transforms for "+todo.fileInfo.pathAndSuffix,
       env.computePostMergeTransforms(todo).foldLeft[NodeSeq](session.merge(processed, Req.nil))((ns, f) => f(ns)))
 
     }
 
+    def snippetFailure(in: SnippetFailure) {
+      import SnippetFailures._
+
+      in match {
+        case SnippetFailure(page, Full(snippet), MethodNotFound) =>
+          logger.error("Trying to execute snippet "+snippet+" but could not find the method on the snippet instance object")
+        case SnippetFailure(page, Full(snippet), ExecutionFailure) => logger.error("Failure while executing snippet "+snippet)
+        case SnippetFailure(page, Full(snippet), InstantiationException) =>
+          logger.error("Trying to instantiate class the provides snippet "+snippet+" but failed")
+
+        case SnippetFailure(page, Full(snippet), ClassNotFound) =>
+          logger.error("Could not find any providers for the snippet named '"+snippet+"'.  Perhaps you mis-typed the name of the snippet in the data-lift='"+snippet+"' attribute.")
+        case _ => logger.info("Snippet Failure: "+in)
+      }
+    }
+
     MDC.clear()
     S.initIfUninitted(session) {
+      LiftRules.snippetFailedFunc.prependWith(snippetFailure _) {
       LiftRules.autoIncludeAjaxCalc.doWith(() => ignore => false) {
         LiftRules.allowParallelSnippets.doWith(() => false) {
           LiftRules.allowAttributeSnippets.doWith(() => false) {
@@ -289,6 +308,7 @@ trait HoistedRenderer {
           }
         }
       }
+    }
     }
   }
 
