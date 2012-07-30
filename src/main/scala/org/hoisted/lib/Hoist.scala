@@ -32,7 +32,7 @@ object HoistedUtil {
         Full((expb match {
           case Full(exp) =>
             "Error Message: "+msg+" error code "+code+"\n" +
-              "Exception: "+exp.toString+"\n"
+            "Exception: "+exp.toString+"\n" +
             "Stack Trace: "+exp.getStackTrace.toList.take(15).map(i => "         "+i.toString).mkString("\n", "\n", "\n")
           case _ => msg+" error code: "+code
         })+(nested.map(f => "\nNested Failure: \n"+boxToErrorString(f)) openOr ""))
@@ -41,7 +41,7 @@ object HoistedUtil {
         Full((expb match {
           case Full(exp) =>
             "Error Message: "+msg+"\n" +
-              "Exception: "+exp.toString+"\n"
+            "Exception: "+exp.toString+"\n" +
             "Stack Trace: "+exp.getStackTrace.toList.take(15).map(i => "         "+i.toString).mkString("\n", "\n", "\n")
           case _ => msg
         })+(nested.map(f => "\nNested Failure: \n"+boxToErrorString(f)) openOr ""))
