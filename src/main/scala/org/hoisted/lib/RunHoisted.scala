@@ -63,16 +63,19 @@ object PostPageTransforms extends TransientRequestVar[Vector[NodeSeq => NodeSeq]
 trait HoistedRenderer extends LazyLoggable {
   @scala.annotation.tailrec
   private def seekInDir(in: File): File = {
+    if (!in.exists()) in else {
     val all = in.listFiles().filter(!_.getName.startsWith(".")).filterNot(_.getName.toLowerCase.startsWith("readme"))
     if (all.length > 1 || all.length == 0 || !all(0).isDirectory) in else seekInDir(all(0))
+    }
   }
 
   def apply(_inDir: File, outDir: File, environment: EnvironmentManager = new DefaultEnvironmentManager): Box[HoistedTransformMetaData] = {
     val log = new ByteArrayOutputStream()
     Logstream.doWith(log) {
       HoistedEnvironmentManager.doWith(environment) {
-        val inDir = seekInDir(_inDir)
+        val __inDir = seekInDir(_inDir)
         for {
+          inDir <- Full(__inDir).filter(_.exists()) ?~ "Failed to get source repository"
           deleteAll <- env.logFailure("Deleting all files in "+outDir)(deleteAll(outDir))
           theDir <- env.logFailure("Making dir "+outDir)(outDir.mkdirs())
           allFiles <- env.logFailure("allFiles for "+inDir)(allFiles(inDir, f => f.exists() && !f.getName.startsWith(".") && f.getName.toLowerCase != "readme" &&
