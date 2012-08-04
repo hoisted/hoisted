@@ -22,13 +22,23 @@ import java.net.URLEncoder
  * To change this template use File | Settings | File Templates.
  */
 
-object BaseSnippets extends LazyLoggable {
-  def archivedPosts: NodeSeq => NodeSeq = {
+object BaseSnippets extends LazyLoggableWithImplicitLogger {
+  def embedBy: NodeSeq => NodeSeq = ns => {
+    val (by, pages) = selectAGroup
+
+    val css = S.attr("css") openOr "*"
+
+    ("*" #> pages.collect{
+      case h: HasHtml => h
+    }.map(p => css #> p.html)).apply(ns)
+  }
+
+  def archivedPosts: NodeSeq => NodeSeq = ns =>  {
     val e2 = env
     val byYear = e2.blogPosts.filter(e2.isValid).groupBy(a => e2.computeDate(a).getYear)
 
     val months: Array[String] = {
-      val locale = ParsedFile.CurrentLocale.box openOr java.util.Locale.getDefault
+      val locale = DateUtils.CurrentLocale.box openOr java.util.Locale.getDefault
       val fmt = DateTimeFormat.forPattern("MMMM")
       val baseDate = new org.joda.time.DateTime()
 
@@ -37,7 +47,7 @@ object BaseSnippets extends LazyLoggable {
 
     val fmt = env.dateFormatter
 
-    ClearClearable andThen "@year-block" #> byYear.keys.
+    (ClearClearable andThen "@year-block" #> byYear.keys.
       toList.sortWith(_ > _).
       map(year => "@year *" #> year & "@month-block" #> {
       val byMonth = byYear(year).groupBy(a => e2.computeDate(a).getMonthOfYear)
@@ -56,7 +66,7 @@ object BaseSnippets extends LazyLoggable {
         "@post-title [data-hoisted-slug]" #> env.computeSlug(post) &
         "@post-title *" #> e2.computeTitle(post) & "@post-title [href]" #> e2.computeLink(post))
       })
-    })
+    })).apply(ns)
   }
 
   def env = HoistedEnvironmentManager.value
@@ -140,7 +150,7 @@ object BaseSnippets extends LazyLoggable {
     S.attr("name").map(name => <div id={name}></div>) openOr NodeSeq.Empty
   }
 
-  def hTags: NodeSeq => NodeSeq = {
+  def hTags: NodeSeq => NodeSeq = ns => {
     val depth = S.attr("depth").flatMap(Helpers.asInt(_)) openOr 2
     val info: List[MetadataValue] = CurrentFile.value.findData(HTagsKey) match {
       case Full(ListMetadataValue(lst)) => lst
@@ -153,12 +163,12 @@ object BaseSnippets extends LazyLoggable {
     ("data-htag=root" #>
       (for {
         md <- info
-          map <- md.map.toList
+          map = md.map
           rd <- map.get(HTagLevelKey).toList.flatMap(_.asInt) if rd <= depth
           body <- map.get(HTagBodyKey).flatMap(_.asNodeSeq)
           id <- map.get(HTagIdKey).flatMap(_.asString)
         } yield
-        "data-htag=root [class+]" #> (depthClass + rd) & "a *" #> body & "a [href]" #> ("#"+id) andThen  "* [data-htag]" #> (Empty: Box[String])))
+        "data-htag=root [class+]" #> (depthClass + rd) & "a *" #> body & "a [href]" #> ("#"+id) andThen  "* [data-htag]" #> (Empty: Box[String]))).apply(ns)
   }
 
   def doSubs(in: NodeSeq): NodeSeq = {
@@ -233,7 +243,7 @@ object BaseSnippets extends LazyLoggable {
 
   )}
 
-  def group(env: EnvironmentManager): NodeSeq => NodeSeq = {
+  def selectAGroup: (String, List[ParsedFile]) = {
     val by = (S.attr("by") openOr "post").toLowerCase
     val order = (S.attr("order") openOr "date").toLowerCase
 
@@ -242,6 +252,7 @@ object BaseSnippets extends LazyLoggable {
     val filterFunc: ParsedFile => Boolean = by match {
       case "post" => env.isBlogPost
       case "event" => env.isEvent
+      case "article" => env.isArticle
       case x => p => p.findData(TypeKey).flatMap(_.asString).map(_.toLowerCase) == Full(x)
     }
 
@@ -265,10 +276,18 @@ object BaseSnippets extends LazyLoggable {
     val sortFunc: (ParsedFile, ParsedFile) => Boolean =
       if (!descending) sortFunc1 else (a, b) => !sortFunc1(a, b)
 
-    val sorted = pages.sortWith(sortFunc)
+    (by, (pages.sortWith(sortFunc), S.attr("max").flatMap(Helpers.asInt)) match {
+      case (ret, Full(max)) => ret.take(max)
+      case (ret, _) => ret
+    })
+  }
+
+  def group(env: EnvironmentManager): NodeSeq => NodeSeq = ns => {
+    val (by, sorted) = selectAGroup
+
     val f = env.dateFormatter
 
-    ("data-post=item" #> sorted.map {
+    (("data-post=item" #> sorted.map {
       p =>
         val (short, more) = env.computeShortContent(p)
 
@@ -280,7 +299,7 @@ object BaseSnippets extends LazyLoggable {
           (if (more) ("data-post=more" #> ("a [href]" #> env.computeLink(p))) else "data-post=more" #> (Empty: Box[String])) &
           "data-post=content" #> env.computeContent(p) &
           "data-post=date *" #> f.print(env.computeDate(p))
-    }) andThen "* [data-post]" #> (Empty: Box[String])
+    }) andThen "* [data-post]" #> (Empty: Box[String])).apply(ns)
   }
 
   def googleAnalytics: NodeSeq => NodeSeq = ns => {
@@ -432,7 +451,7 @@ object BaseSnippets extends LazyLoggable {
         </li>
       </ul>))
 
-  def blogPosts: NodeSeq => NodeSeq = {
+  def blogPosts: NodeSeq => NodeSeq = ns => {
     val posts = HoistedEnvironmentManager.value.blogPosts.take(S.attr("max").flatMap(Helpers.asInt _) openOr Integer.MAX_VALUE)
 
     val m = HoistedEnvironmentManager.value
@@ -451,7 +470,7 @@ object BaseSnippets extends LazyLoggable {
           (if (more) ("data-post=more" #> ("a [href]" #> m.computeLink(p))) else "data-post=more" #> (Empty: Box[String])) &
           "data-post=content" #> m.computeContent(p) &
           "data-post=date *" #> f.print(m.computeDate(p))
-    } andThen "* [data-post]" #> (Empty: Box[String]))
+    } andThen "* [data-post]" #> (Empty: Box[String])).apply(ns)
   }
 
   def testAttr(in: NodeSeq): NodeSeq = {
@@ -494,7 +513,7 @@ object BaseSnippets extends LazyLoggable {
         case e: Elem => e
       }.flatMap(_.child): NodeSeq) openOr
         (("* [data-css]" #> (None: Option[String])).apply(ns))
-      xf <- (Helpers.tryo(css #> thing): Box[NodeSeq => NodeSeq])
+      xf <- (HoistedUtil.logFailure("Creating CSS xform for "+css+" with right side "+thing)(css #> thing): Box[NodeSeq => NodeSeq])
     } {
       PostPageTransforms.set(PostPageTransforms.get :+ xf)
     }

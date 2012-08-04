@@ -24,24 +24,42 @@ object MarkdownParser {
 
   lazy val linkDefs = """(?m)^\p{Space}{0,3}\[([^:]+)[=:](?:[ ]*)(.+)\]:""".r
 
+  lazy val hasYaml = """(?s)(?m)^[yY][aA][mM][lL][ \t]*\{[ \t]*$(.*?)^\}[ \t]*[yY][Aa][mM][Ll][ \t]*$""".r
+  lazy val htmlHasYaml = """(?s)(?m)\A(:?[ \t]*\n)*^[yY][aA][mM][lL][ \t]*\{[ \t]*$(.*?)^\}[ \t]*[yY][Aa][mM][Ll][ \t]*$""".r
 
-  def readTopMetadata(in: String): (String, List[(String, String)]) = {
-    val (_in, pairs): (String, List[(String, String)]) = matchMetadata.findFirstIn(in) match {
-      case Some(data) =>
-        (matchMetadata.replaceAllIn(in, ""),
-        lineSplit.findAllIn(data).toList.flatMap(s =>
-          topMetadata.findAllIn(s).matchData.toList.map(md => (md.group(1).trim, md.group(2).trim))))
-      case None => (in, Nil)
-    }
 
-    val pairs2: List[(String, String)] =
-      linkDefs.findAllIn(_in).matchData.toList.map(md => (md.group(1).trim, md.group(2).trim))
+  def readTopMetadata(in: String, markdownFormat: Boolean): (String, MetadataValue) = {
+    val yamlRegex = if (markdownFormat) hasYaml else htmlHasYaml
 
-    (_in, pairs ::: pairs2)
+    val pairs: List[MetadataValue] =
+      for {
+        thing <- yamlRegex.findAllIn(in).matchData.toList
+        yamlStr = thing.group(1)
+        yaml <- YamlUtil.parse(yamlStr)
+      } yield yaml
+
+    val (_in, p2) =
+      pairs match {
+        case Nil =>
+          matchMetadata.findFirstIn(in) match {
+            case Some(data) =>
+              (matchMetadata.replaceAllIn(in, ""),
+                List(KeyedMetadataValue.build(lineSplit.findAllIn(data).toList.flatMap(s =>
+                  topMetadata.findAllIn(s).matchData.toList.map(md => (md.group(1).trim, md.group(2).trim))))))
+            case None => (in, List(NullMetadataValue))
+          }
+        case x => (yamlRegex.replaceAllIn(in, ""), x)
+      }
+
+    val pairs2: MetadataValue = if (markdownFormat)
+      KeyedMetadataValue.build(linkDefs.findAllIn(_in).
+        matchData.toList.map(md => (md.group(1).trim, md.group(2).trim))) else NullMetadataValue
+
+    (_in, p2.foldLeft(pairs2)(_ +&+ _))
   }
 
-  def parse(in: String): Box[(NodeSeq, List[(String, String)])] = {
-    val (_in, retPairs) = readTopMetadata(in)
+  def parse(in: String): Box[(NodeSeq, MetadataValue)] = {
+    val (_in, retPairs) = readTopMetadata(in, true)
 
     val pd = new PegDownProcessor(Extensions.FENCED_CODE_BLOCKS | Extensions.QUOTES | Extensions.SMARTYPANTS)
     val raw = pd.markdownToHtml(

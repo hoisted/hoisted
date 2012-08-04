@@ -7,6 +7,8 @@ scalaVersion := "2.9.2"
 
 scalacOptions += "-deprecation"
 
+// scalacOptions += "-unchecked"
+
 publishMavenStyle := true
 
 autoCompilerPlugins := true
@@ -37,6 +39,7 @@ libraryDependencies ++= {
 libraryDependencies ++= {
   Seq(
     "org.apache.tika" % "tika-parsers" % "1.1",
+    "org.yaml" % "snakeyaml" % "1.10",
     "junit" % "junit" % "4.7" % "test",
     "ch.qos.logback" % "logback-classic" % "1.0.6" % "compile" ,
     "org.pegdown" %  "pegdown" % "1.1.0",

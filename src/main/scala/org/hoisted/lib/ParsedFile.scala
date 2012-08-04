@@ -7,10 +7,11 @@ import util._
 import Helpers._
 import scala.xml._
 import java.io._
-import org.joda.time.{DateTimeZone, DateTime}
-import org.joda.time.format.{DateTimeFormatter, ISODateTimeFormat, DateTimeFormat}
+import org.joda.time.{ DateTime}
 import collection.mutable.ListBuffer
-import java.util.Locale
+import org.apache.tika.parser.AutoDetectParser
+import org.apache.tika.sax.ToHTMLContentHandler
+import org.apache.tika.metadata.Metadata
 
 /**
  * Created with IntelliJ IDEA.
@@ -20,68 +21,8 @@ import java.util.Locale
  * To change this template use File | Settings | File Templates.
  */
 
-final case class PathAndSuffix(path: List[String], suffix: Option[String]) {
-  def display: String = path.mkString("/", "/", "") + (suffix.map(s => "." + s) getOrElse "")
-}
+object ParsedFile extends LazyLoggableWithImplicitLogger {
 
-object ParsedFile {
-
-  lazy val w3cDateTimeFormat = DateTimeFormat.forPattern("yyyy-MM-dd'T'HH:mm:ssZ")
-
-  object CurrentTimeZone extends ThreadGlobal[DateTimeZone]
-
-  object CurrentLocale extends ThreadGlobal[Locale]
-
-  lazy val dateFormats = List(DateTimeFormat.forPattern("EEE, dd MMM yyyy HH:mm:ss Z"),
-    DateTimeFormat.forPattern("yyyy-MM-dd HH:mm:ss Z"),
-    DateTimeFormat.forPattern("yyyy/MM/dd HH:mm:ss Z"),
-    DateTimeFormat.forPattern("yyyy-MM-dd HH:mm:ss"),
-    DateTimeFormat.forPattern("yyyy/MM/dd HH:mm:ss"),
-    DateTimeFormat.forPattern("yyyy-MM-dd HH:mm Z"),
-    DateTimeFormat.forPattern("yyyy/MM/dd HH:mm Z"),
-    DateTimeFormat.forPattern("yyyy-MM-dd HH:mm"),
-    DateTimeFormat.forPattern("yyyy/MM/dd HH:mm"),
-    DateTimeFormat.forPattern("yyyy-MM-dd Z"),
-    DateTimeFormat.forPattern("yyyy/MM/dd Z"),
-    DateTimeFormat.forPattern("yyyy-MM-dd"),
-    DateTimeFormat.forPattern("yyyy/MM/dd"),
-    ISODateTimeFormat.basicDateTime(),
-    ISODateTimeFormat.basicDate(),
-    DateTimeFormat.longDateTime(),
-    DateTimeFormat.fullDateTime(),
-    DateTimeFormat.fullDate(),
-    DateTimeFormat.longDate(),
-    DateTimeFormat.mediumDateTime(),
-    DateTimeFormat.mediumDate(),
-    DateTimeFormat.shortDateTime(),
-    DateTimeFormat.shortDate()).toStream
-
-  /**
-   * Create a function that takes a DateTimeFormatter and updates it based on the
-   * locale and timezone in CurrentLocale and CurrentTimezone
-   * @return
-   */
-  def fixDateTimeFormatter: DateTimeFormatter => DateTimeFormatter =
-    (CurrentTimeZone.box, CurrentLocale.box) match {
-      case (Full(tz), Full(locale)) => ((f: DateTimeFormatter) => f.withZone(tz).withLocale(locale))
-      case (Full(tz), _) => ((f: DateTimeFormatter) => f.withZone(tz))
-      case (_, Full(locale)) => ((f: DateTimeFormatter) => f.withLocale(locale))
-      case _ => f => f
-    }
-
-  def parseDate(str: String): Box[DateTime] = {
-    val mod: DateTimeFormatter => DateTimeFormatter = fixDateTimeFormatter
-
-    dateFormats.flatMap(f => tryo(mod(f).parseDateTime(str))).headOption
-  }
-
-  @scala.annotation.tailrec
-  def uglyParseDate(str: String): Box[DateTime] = if (str.length < 8) Empty else {
-    parseDate(str) match {
-      case Full(d) => Full(d)
-      case _ => uglyParseDate(str.dropRight(1))
-    }
-  }
 
 
   def findBody(in: NodeSeq): NodeSeq =
@@ -116,34 +57,6 @@ object ParsedFile {
   def apply(fi: FileInfo): Box[ParsedFile] = {
     fi.suffix.map(_.toLowerCase) match {
         /*
-      case Some("doc") | Some("docx") | Some("rtf") | Some("pages") =>
-        (for {
-          realFile <- fi.file
-          inputStream <- tryo(new FileInputStream(realFile))
-          out = new ByteArrayOutputStream()
-          handler = new ToHTMLContentHandler(out, "UTF-8")
-          metadata = new Metadata()
-          myParser = new AutoDetectParser()
-          thing <- tryo(try {myParser.parse(inputStream, handler, metadata)} finally {tryo(inputStream.close)})
-          str = new String(out.toByteArray, "UTF-8")
-          html <- parseHtml5File(str)
-
-        } yield {
-          val h2: NodeSeq = (html \ "body").toList.collect{
-            case e: Elem => e
-          }.flatMap(_.child)
-
-          val md =
-          metadata.names().foldLeft[MetadataMeta.Metadata](Map.empty){(map, key) =>
-            val k2 = MetadataKey(key)
-            metadata.getValues(key).toList match {
-            case Nil => map
-            case x::Nil => map + (k2 -> MetadataValue(x))
-            case xs => map + (k2 -> ListMetadataValue(xs.map(MetadataValue(_))))
-          }}
-
-          HtmlFile(fi, h2, HoistedEnvironmentManager.value.updateMetadata(md, fi))
-        }) or Full(OtherFile(fi))
 
         /*
 
@@ -174,38 +87,57 @@ res0: net.liftweb.common.Box[org.hoisted.lib.HoistedTransformMetaData] = Full(Ho
       case Some("xml") | Some("cms.xml") =>
         for {
           realFile <- fi.file
-          fis <- tryo(new FileInputStream(realFile))
+          fis <- HoistedUtil.logFailure("Trying to open file "+realFile)(new FileInputStream(realFile))
           xml <- PCDataXmlParser(fis)
-          _ <- tryo(fis.close())
+          _ <- HoistedUtil.logFailure("Trying to close stream for file "+realFile)(fis.close())
           metaData = findXmlMetaData(xml)
-          (realBody, headMeta) = findHeaders(findBody(xml))
-        } yield XmlFile(fi, realBody, xml,
-          HoistedEnvironmentManager.value.updateMetadata(metaData ++ headMeta, fi))
+        } yield XmlFile(fi, findBody(xml), xml, metaData)
 
       case Some("html") | Some("htm") =>
         for {
           realFile <- fi.file
-          fis <- tryo(new FileInputStream(realFile))
-          bytes <- tryo(Helpers.readWholeStream(fis))
+          fis <- HoistedUtil.logFailure("Trying to open file "+realFile)(new FileInputStream(realFile))
+          bytes <- HoistedUtil.logFailure("Reading "+realFile)(Helpers.readWholeStream(fis))
           str = new String(bytes, "UTF-8")
-          (str2, info) = MarkdownParser.readTopMetadata(str)
+          (str2, info) = MarkdownParser.readTopMetadata(str, false)
           html <- parseHtml5File(str2)
-          _ <- tryo(fis.close())
-          (_html, metaData) = findHtmlMetaData(html)
-          (__html, headMeta) = findHeaders(_html)
-        } yield HtmlFile(fi, __html,
-        HoistedEnvironmentManager.value.updateMetadata(
-          mergeMetadata(pairsToMetadata(info), metaData ++ headMeta), fi))
+          _ <- HoistedUtil.logFailure("Closing "+realFile)(fis.close())
+        } yield HtmlFile(fi, html, info)
 
       case Some("md") =>
         for {
           realFile <- fi.file
-          whole <- tryo(Helpers.readWholeFile(realFile))
+          whole <- HoistedUtil.logFailure("Reading "+realFile)(Helpers.readWholeFile(realFile))
           str = new String(whole, "UTF-8")
           (elems, rawMeta) <- MarkdownParser.parse(str)
-          (html, headMeta) = findHeaders(elems)
-        } yield MarkdownFile(fi, html,
-          HoistedEnvironmentManager.value.updateMetadata(pairsToMetadata(rawMeta) ++ headMeta, fi))
+
+        } yield MarkdownFile(fi, elems, rawMeta)
+
+      case Some("doc") | Some("docx") | Some("rtf") | Some("pages") =>
+        (for {
+          realFile <- fi.file
+          inputStream <- HoistedUtil.logFailure("Opening "+realFile)(new FileInputStream(realFile))
+          out = new ByteArrayOutputStream()
+          handler = new ToHTMLContentHandler(out, "UTF-8")
+          metadata = new Metadata()
+          myParser = new AutoDetectParser()
+          thing <- HoistedUtil.logFailure("Trying to read word, rtf, whatever "+realFile)(try {myParser.parse(inputStream, handler, metadata)} finally {tryo(inputStream.close)})
+          str = new String(out.toByteArray, "UTF-8")
+          html <- parseHtml5File(str)
+
+        } yield {
+
+
+          val md: MetadataValue =
+            KeyedMetadataValue(metadata.names().foldLeft[MetadataMeta.Metadata](Map.empty){(map, key) =>
+              val k2 = MetadataKey(key)
+              metadata.getValues(key).toList match {
+                case Nil => map
+                case x::Nil => map + (k2 -> MetadataValue(x))
+                case xs => map + (k2 -> ListMetadataValue(xs.map(MetadataValue(_))))
+              }}.toList)
+
+          HtmlFile(fi, html ,md)}) or Full(OtherFile(fi))
 
       case _ => Full(OtherFile(fi))
     }
@@ -223,12 +155,12 @@ res0: net.liftweb.common.Box[org.hoisted.lib.HoistedTransformMetaData] = Full(Ho
   }
 
   private def buildMetadataValue(in: (Int, String, NodeSeq)): MetadataValue =
-  KeyedMetadataValue(HTagLevelKey -> StringMetadataValue(in._1.toString),
-  HTagIdKey -> StringMetadataValue(in._2), HTagBodyKey -> NodeSeqMetadataValue(in._3))
+  KeyedMetadataValue(List(HTagLevelKey -> StringMetadataValue(in._1.toString),
+    HTagIdKey -> StringMetadataValue(in._2), HTagBodyKey -> NodeSeqMetadataValue(in._3)))
 
   // find and record the H* depth... plus add an id to each h* tag
-  def findHeaders(in: NodeSeq): (NodeSeq, MetadataMeta.Metadata) = {
-    def morphIt(in: NodeSeq): (NodeSeq, MetadataMeta.Metadata) = {
+  def findHeaders(in: NodeSeq): (NodeSeq, MetadataValue) = {
+    def morphIt(in: NodeSeq): (NodeSeq, MetadataValue) = {
       val lb = new ListBuffer[(Int, String, NodeSeq)]
 
       var ids: Set[String] = Set()
@@ -269,10 +201,10 @@ res0: net.liftweb.common.Box[org.hoisted.lib.HoistedTransformMetaData] = Full(Ho
         case x => x
       }
 
-      (res, Map(HTagsKey -> ListMetadataValue(lb.toList.map(buildMetadataValue))))
+      (res, KeyedMetadataValue(List(HTagsKey -> ListMetadataValue(lb.toList.map(buildMetadataValue)))))
     }
   if ((in \ "body").length > 0) {
-    var info: MetadataMeta.Metadata = Map.empty
+    var info: MetadataValue = NullMetadataValue
     val nodes = ("body *" #> ((ns: NodeSeq) => {
       val (a, b) = morphIt(ns)
       info = b
@@ -300,12 +232,7 @@ res0: net.liftweb.common.Box[org.hoisted.lib.HoistedTransformMetaData] = Full(Ho
     }
   }
 
-  def findHtmlMetaData(in: NodeSeq): (NodeSeq, MetadataMeta.Metadata) = {
-
-    (in, Map.empty) // FIXME
-  }
-
-  def findXmlMetaData(in: NodeSeq): MetadataMeta.Metadata = {
+  def findXmlMetaData(in: NodeSeq): MetadataValue = {
     val somePairs: List[(String, String)] = (in \\ "cms").toList.flatMap {
       case e: Elem => e.attributes.toList.flatMap {
         case up: UnprefixedAttribute if up.value ne null => List((up.key, up.value.text))
@@ -319,11 +246,18 @@ res0: net.liftweb.common.Box[org.hoisted.lib.HoistedTransformMetaData] = Full(Ho
         for {
           name <- e.attribute("name").toList.map(_.text)
           value = e.attribute("value").map(_.text)
-          body: Option[NodeSeq] = Some(e.child).filter(!_.isEmpty).map(a => (a: NodeSeq))
+          body = Some(e.child).filter(!_.isEmpty).map(a => (a: NodeSeq))
         } yield (name, (value, body))
       case _ => Nil
     }
-    mergeMetadata(pairsToMetadata(somePairs), pairsToMetadata(otherPairs))
+    KeyedMetadataValue.build(somePairs) +&+
+    KeyedMetadataValue(otherPairs.flatMap{
+      case (name, (Some(str), Some(ns))) => List(MetadataKey(name) ->
+        ListMetadataValue(List(StringMetadataValue(str), NodeSeqMetadataValue(ns))))
+      case (name, (_, Some(ns))) => List(MetadataKey(name) -> NodeSeqMetadataValue(ns))
+      case (name, (Some(str), _)) => List(MetadataKey(name) -> StringMetadataValue(str))
+      case _ => Nil
+    })
   }
 
   def filterNames[T](in: List[(String, T)]): List[(MetadataKey, T)] =
@@ -332,6 +266,7 @@ res0: net.liftweb.common.Box[org.hoisted.lib.HoistedTransformMetaData] = Full(Ho
       case _ => Nil
     }
 
+  /*
   def pairsToMetadata[T](in: List[(String, T)])(implicit buildMetadata: MetadataBuilder[T]): MetadataMeta.Metadata = {
     filterNames(in).foldLeft[MetadataMeta.Metadata](Map()) {
       case (m, (key, value)) if key.global =>
@@ -350,19 +285,36 @@ res0: net.liftweb.common.Box[org.hoisted.lib.HoistedTransformMetaData] = Full(Ho
 
   def append(m1: MetadataMeta.Metadata, key: MetadataKey, value: MetadataValue): MetadataMeta.Metadata =
     m1 + (key -> (m1.getOrElse(key, NullMetadataValue).append(value, key)))
-
+*/
 
 }
 
 
 sealed trait ParsedFile {
+  type MyType <: ParsedFile
+
+  def updateFileInfo(newFileInfo: FileInfo): MyType
+
+  def metaData: MetadataValue
+
+  def findData(in: MetadataKey): Box[MetadataValue] = metaData.map.get(in)
+
+  def updateMetadata(newMd: MetadataValue): MyType
+
+  def updateMetadata(key: MetadataKey, value: MetadataValue): MyType = {
+    updateMetadata(metaData.removeKey(key).addKey(key, value))
+  }
+
+  def morphPath(f: List[String] => List[String]): MyType = {
+    val np = f(pathAndSuffix.path)
+    updateFileInfo(pathAndSuffix.copy(path = np).toFileInfo(fileInfo.file))
+  }
+
   def fileInfo: FileInfo
 
   def pathAndSuffix: PathAndSuffix = fileInfo.pathAndSuffix
 
   // def hidden: Boolean = !fileInfo.pathAndSuffix.path.filter(_.startsWith("_")).isEmpty
-
-  def findData(in: MetadataKey): Box[MetadataValue] = Empty
 
   def uniqueId: String
 
@@ -370,7 +322,11 @@ sealed trait ParsedFile {
 }
 
 sealed trait HasHtml extends ParsedFile {
+  type MyType <: HasHtml
+
   def html: NodeSeq
+
+  def updateHtml(newHtml: NodeSeq): MyType
 
   def writeTo(out: OutputStream): Unit = {
    if (HoistedEnvironmentManager.value.isHtml(this))  {
@@ -409,42 +365,68 @@ object MetadataBuilder {
     }
 }
 
-
-sealed trait HasMetaData extends ParsedFile {
-  def metaData: MetadataMeta.Metadata
-
-  override def findData(in: MetadataKey): Box[MetadataValue] = metaData.get(in)
-
-}
-
 final case class SyntheticFile(computeFileInfo: () => FileInfo,
-                               computeMetaData: () => MetadataMeta.Metadata,
+                               computeMetaData: () => MetadataValue,
                                writer: OutputStream => Unit,
-                               uniqueId: String = Helpers.nextFuncName) extends ParsedFile with HasMetaData {
+                               uniqueId: String = Helpers.nextFuncName) extends ParsedFile {
+  type MyType = SyntheticFile
+
+  def updateFileInfo(newFileInfo: FileInfo): SyntheticFile = this
+
   lazy val fileInfo = computeFileInfo()
   def writeTo(out: OutputStream): Unit = writer(out)
 
-  lazy val metaData: MetadataMeta.Metadata = computeMetaData()
+  override lazy val metaData: MetadataValue = computeMetaData()
+
+  def updateMetadata(newMd: MetadataValue): SyntheticFile = this
 }
 
 final case class XmlFile(fileInfo: FileInfo,
                          html: NodeSeq,
                          raw: NodeSeq,
-                         metaData: MetadataMeta.Metadata,
-                         uniqueId: String = Helpers.nextFuncName) extends ParsedFile with HasHtml with HasMetaData
+                         metaData: MetadataValue,
+                         uniqueId: String = Helpers.nextFuncName) extends HasHtml {
+  type MyType = XmlFile
+
+  def updateFileInfo(newFileInfo: FileInfo): XmlFile = copy(fileInfo = newFileInfo)
+
+
+
+  def updateMetadata(newMd: MetadataValue): XmlFile = copy(metaData =  newMd)
+  def updateHtml(newHtml: NodeSeq): XmlFile = copy(html = newHtml)
+}
 
 final case class HtmlFile(fileInfo: FileInfo,
                           html: NodeSeq,
-                          metaData: MetadataMeta.Metadata,
-                          uniqueId: String = Helpers.nextFuncName) extends ParsedFile with HasHtml with HasMetaData
+                          metaData: MetadataValue,
+                          uniqueId: String = Helpers.nextFuncName) extends HasHtml {
+  type MyType = HtmlFile
+
+  def updateFileInfo(newFileInfo: FileInfo): HtmlFile = copy(fileInfo = newFileInfo)
+
+  def updateMetadata(newMd: MetadataValue): HtmlFile = copy(metaData =  newMd)
+  def updateHtml(newHtml: NodeSeq): HtmlFile = copy(html = newHtml)
+}
 
 final case class MarkdownFile(fileInfo: FileInfo,
                               html: NodeSeq,
-                              metaData: MetadataMeta.Metadata,
-                              uniqueId: String = Helpers.nextFuncName) extends ParsedFile with HasHtml with HasMetaData
+                              metaData: MetadataValue,
+                              uniqueId: String = Helpers.nextFuncName) extends HasHtml {
+  type MyType = MarkdownFile
+
+  def updateFileInfo(newFileInfo: FileInfo): MarkdownFile = copy(fileInfo = newFileInfo)
+
+  def updateMetadata(newMd: MetadataValue): MarkdownFile = copy(metaData =  newMd)
+  def updateHtml(newHtml: NodeSeq): MarkdownFile = copy(html = newHtml)
+}
 
 final case class OtherFile(fileInfo: FileInfo,
+                           metaData: MetadataValue = NullMetadataValue,
                            uniqueId: String = Helpers.nextFuncName) extends ParsedFile {
+  type MyType = OtherFile
+
+  def updateFileInfo(newFileInfo: FileInfo): OtherFile = copy(fileInfo = newFileInfo)
+  def updateMetadata(newMd: MetadataValue): OtherFile = copy(metaData =  newMd)
 
   def writeTo(out: OutputStream) {
     val bufLen = 4096
@@ -479,6 +461,15 @@ case class Alias(from: String, to: String)
 final case class FileInfo(file: Box[File], relPath: String, name: String, pureName: String, suffix: Option[String]) {
   lazy val pathAndSuffix: PathAndSuffix =
     PathAndSuffix(relPath.toLowerCase.roboSplit("/").dropRight(1) ::: List(name.toLowerCase), suffix.map(_.toLowerCase))
+}
+
+
+final case class PathAndSuffix(path: List[String], suffix: Option[String]) {
+  def display: String = path.mkString("/", "/", "") + (suffix.map(s => "." + s) getOrElse "")
+  def toFileInfo(file: Box[File]): FileInfo = FileInfo(file,
+    display, path.takeRight(1).head,
+    (suffix.map(s => "." + s) getOrElse "") +
+    (suffix.map(s => "." + s) getOrElse ""), suffix)
 }
 
 
