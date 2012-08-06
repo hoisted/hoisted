@@ -115,7 +115,7 @@ trait HoistedRenderer extends LazyLoggableWithImplicitLogger {
       (HoistedUtil.reportFailure("Trying to fetch external resource for "+k)(for {
         url <- k.findString(UrlKey) ?~ ("Failed to get URL for external link in "+k)
         first <- env.loadTemplates(url, Nil, false)
-        xform = Transformer.listFromMetadata(k)
+        xform = env.metadataTransformRules ::: Transformer.listFromMetadata(k)
         tests = TransformTest.fromMetadata(k)
         xformed = first.flatMap(f => xform.map(_(f)))
         filtered = env.removeRemoved(xformed.filter(tests))
