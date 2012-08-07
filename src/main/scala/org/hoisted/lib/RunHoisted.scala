@@ -44,7 +44,7 @@ object VeryTesty {
       configurator.doConfigure(is)
     })
 
-    RunHoisted(new File("/home/dpp/proj/plaything"), new File("/home/dpp/tmp/outfrog")).map(_.logs)
+    RunHoisted(new File("/Users/dpp/proj/dpp-blog"), new File("/Users/dpp/tmp/outfrog")).map(_.logs)
   }
 }
 
@@ -92,11 +92,13 @@ trait HoistedRenderer extends LazyLoggableWithImplicitLogger {
    * update the metadata for each file.  Then pull any externally referenced files
    * and parse them and apply metadata.
    *
-   * @param in
+   * @param _in
    * @return
    */
-  def doMetadataMagicAndSuch(in: List[ParsedFile]): Box[List[ParsedFile]] = {
-    in.foreach(pf => env.updateGlobalMetadata(pf.metaData))
+  def doMetadataMagicAndSuch(_in: List[ParsedFile]): Box[List[ParsedFile]] = {
+    _in.foreach(pf => env.updateGlobalMetadata(pf.metaData))
+
+    val in = _in.map(env.transformFile)
 
     val withLoadedTemplates =
     env.findMetadata(ExternalLinkKey) match {
@@ -105,28 +107,65 @@ trait HoistedRenderer extends LazyLoggableWithImplicitLogger {
       case _ => in
     }
 
-    val base = withLoadedTemplates.map(env.transformFile)
-
-    Full(base)
+    Full(withLoadedTemplates)
   }
 
-  def loadExternal(cur: List[ParsedFile], info: MetadataValue): List[ParsedFile] = info match {
+  private def dedupNames(first: List[ParsedFile], second: List[ParsedFile]): List[ParsedFile] = {
+    val curSet = Set(first.map(_.fileInfo.pathAndSuffix.path): _*)
+
+    def fixConflict(in: ParsedFile): ParsedFile =
+      if (!curSet.contains(in.fileInfo.pathAndSuffix.path)) in
+      else {
+        val old = in.fileInfo.pathAndSuffix
+        val newer = old.copy(path = old.path.dropRight(1) ::: old.path.takeRight(1).map(_ + "_dup"))
+        val fixed = in.updateFileInfo(newer.toFileInfo(in.fileInfo.file))
+        fixConflict(fixed)
+      }
+
+    second.map(fixConflict _)
+  }
+
+  private def dedupPaths(first: List[ParsedFile], second: List[ParsedFile]): List[ParsedFile] = {
+    val curSet = Set(first.flatMap(_.findData(OutputPathKey).flatMap(_.asString)): _*)
+
+    def fixConflict(in: ParsedFile): ParsedFile = {
+      in.findData(OutputPathKey).flatMap(_.asString) match {
+        case e: EmptyBox => in
+        case Full(str) if !curSet.contains(str) => in
+        case Full(str) =>
+          fixConflict(in.updateMetadata(OutputPathKey, str+"_dup"))
+      }
+    }
+
+    second.map(fixConflict _)
+  }
+
+  def loadExternal(cur: List[ParsedFile], info: MetadataValue): List[ParsedFile] = {
+    info match {
     case k: KeyedMetadataValue =>
+
       (HoistedUtil.reportFailure("Trying to fetch external resource for "+k)(for {
         url <- k.findString(UrlKey) ?~ ("Failed to get URL for external link in "+k)
-        first <- env.loadTemplates(url, Nil, false)
+
+        first_prime <- env.loadTemplates(url, Nil, false)
+        first = dedupNames(cur, first_prime)
         xform = env.metadataTransformRules ::: Transformer.listFromMetadata(k)
         tests = TransformTest.fromMetadata(k)
-        xformed = first.flatMap(f => xform.map(_(f)))
+        xformed = first.map(f => xform.foldLeft(f)((pf, func) => func(pf)))
         filtered = env.removeRemoved(xformed.filter(tests))
-      } yield env.mergeTemplateSets(cur, filtered, true))) openOr cur
+        filtered_2 = dedupPaths(cur, filtered)
+      } yield env.mergeTemplateSets(cur, filtered_2, true))) openOr cur
     case md =>
       (HoistedUtil.reportFailure("Trying to fetch external resource for "+md)(for {
         url <- md.asString ?~ ("Couldn't turn "+md+" into a URL")
-        merged <- env.loadTemplates(url, cur, true)
-      } yield merged)) openOr cur
-
-  }
+        first_prime <- env.loadTemplates(url, Nil, true)
+        first = dedupNames(cur, first_prime)
+        xform = env.metadataTransformRules
+        xformed = first.map(f => xform.foldLeft(f)((pf, func) => func(pf)))
+        filtered = env.removeRemoved(xformed)
+        filtered_2 = dedupPaths(cur, filtered)
+      } yield env.mergeTemplateSets(cur, filtered_2, true))) openOr cur
+  }}
 
   /**
    * Do an initial pass on the files to include other files

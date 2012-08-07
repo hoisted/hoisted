@@ -201,6 +201,8 @@ case object TagsKey extends MetadataKey {
   def global = false
 
   def key = "tag"
+
+  override def alt: List[String] = List("tags")
 }
 
 case object SiteAuthorKey  extends MetadataKey {

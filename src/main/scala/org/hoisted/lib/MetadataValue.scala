@@ -157,7 +157,8 @@ final case class DoubleMetadataValue(d: Double) extends MetadataValue  {
 object KeyedMetadataValue {
   def apply(key: MetadataKey, value: MetadataValue): KeyedMetadataValue  = KeyedMetadataValue(List(key -> value))
   def apply(map: MetadataMeta.Metadata): KeyedMetadataValue  = KeyedMetadataValue(map.toList)
-  def build(lst: List[(String, String)]): KeyedMetadataValue  = new KeyedMetadataValue(lst.map{case (k, v) => MetadataKey(k) -> StringMetadataValue(v)})
+  def build(lst: List[(String, String)]): KeyedMetadataValue  =
+    new KeyedMetadataValue(lst.map{case (k, v) => MetadataKey(k) -> MetadataValue(v)})
 }
 
 final case class KeyedMetadataValue(pairs: Seq[(MetadataKey, MetadataValue)]) extends MetadataValue  {

@@ -55,6 +55,8 @@ object TransformTest extends LazyLoggableWithImplicitLogger {
 
 case class BooleanTest(result: Boolean) extends TransformTest {
   def test(pf: ParsedFile): Boolean = result
+
+  override def toString = "Bool "+result
 }
 
 trait TransformTest extends Function1[ParsedFile, Boolean] {
@@ -65,6 +67,7 @@ trait TransformTest extends Function1[ParsedFile, Boolean] {
 
 case class NotTransformTest(other: TransformTest) extends TransformTest {
   def test(pf: ParsedFile): Boolean = !other.test(pf)
+  override def toString = "Not("+other+")"
 }
 
 case class OrTransformTest(others: TransformTest*) extends TransformTest {
@@ -81,7 +84,9 @@ case class OrTransformTest(others: TransformTest*) extends TransformTest {
 
     test(false, lst)
   }
+  override def toString = "Or("+others.map(_.toString()).mkString(", ")+")"
 }
+
 case class AndTransformTest(others: TransformTest*) extends TransformTest {
   private lazy val lst: List[TransformTest] = others.toList
   def test(pf: ParsedFile): Boolean = {
@@ -96,34 +101,47 @@ case class AndTransformTest(others: TransformTest*) extends TransformTest {
 
     test(true, lst)
   }
+  override def toString = "And("+others.map(_.toString()).mkString(", ")+")"
 }
 
 case class HasTagTest(tag: String) extends TransformTest {
-  def test(pf: ParsedFile): Boolean =
+  def test(pf: ParsedFile): Boolean = {
     pf.findData(TagsKey).
       map(_.forceListString.map(_.toLowerCase.trim).
       contains(tag.toLowerCase.trim)) openOr false
+  }
+
+  override def toString = "HasTag("+tag+")"
 }
 
 case class TestHasMetadata(key: MetadataKey) extends TransformTest {
   def test(pf: ParsedFile): Boolean =
     pf.findData(key).isDefined
+  override def toString = "HasMetadata("+key+")"
+
 }
 
 case class TestEqStringMetadata(key: MetadataKey, str: String) extends TransformTest {
   def test(pf: ParsedFile): Boolean =
     pf.findData(key).map(_.forceString.trim.toLowerCase) == Some(str.trim.toLowerCase)
+
+  override def toString = key.toString+" == "+str
+
 }
 
 case class TestContainsStringMetadata(key: MetadataKey, str: String) extends TransformTest {
   def test(pf: ParsedFile): Boolean =
     pf.findData(key).map(_.forceListString.map(_.trim.toLowerCase).contains(str)).openOr(false)
+
+  override def toString = key.toString+" contains "+str
 }
 
 
 case class TestEqMetadata(key: MetadataKey, value: MetadataValue) extends TransformTest {
   def test(pf: ParsedFile): Boolean =
     pf.findData(key).map(v => v.testEq(value)).openOr(false)
+
+  override def toString = key.toString+" == "+value
 }
 
 
@@ -133,6 +151,8 @@ case class TestPathStartsWith(str: String) extends TransformTest
     case v :: _ if v.trim.toLowerCase == str.trim.toLowerCase => true
     case _ => false
   }
+
+  override def toString = "Path Starts with "+str
 }
 
 object Transformer {
@@ -158,7 +178,8 @@ object Transformer {
       case StringMetadataValue(UpdatePathRootXFormKey(_)) => List(UpdatePathRootTransform)
       case StringMetadataValue(DateFromPathXFormKey(_)) => List(DateFromPathTransform)
       case ListMetadataValue(lst) => lst.flatMap(listFromMetadata(_))
-      case KeyedMetadataValue(pairs) => pairs.toList.flatMap{
+      case KeyedMetadataValue(pairs) =>
+        pairs.toList.flatMap{
         case (UpdatePathRootXFormKey, md) => wrap(List(UpdatePathRootTransform), md)
         case (DateFromPathXFormKey, md) => wrap(List(DateFromPathTransform), md)
         case (RemovePathPrefixXFormKey, md) => md.forceListString match {
@@ -169,11 +190,10 @@ object Transformer {
           case Nil => Nil
           case xs => wrap(List(PrependPathTransform(xs)), md)
         }
-        case (SetValueXFormKey, md@ListMetadataValue(key :: value :: _)) => md.forceListString match {
-          case Nil => Nil
-          case xs => wrap(key.asString.toList.map(k =>
-            SetValueOnTestTransform(MetadataKey(k), value, BooleanTest(true) )), md)
-        }
+        case (SetValueXFormKey, ListMetadataValue(key :: value :: rest)) =>
+        wrap(key.asString.toList.map(k =>
+            SetValueOnTestTransform(MetadataKey(k), value, BooleanTest(true) )), ListMetadataValue(rest))
+
         case other =>
           Nil
       }
@@ -195,6 +215,8 @@ case class TestAndTransform(test: TransformTest, transforms: Seq[Transformer]) e
   def transformsKey(toTest: MetadataKey): Boolean = transforms.find(_.transformsKey(toTest)).isDefined
   def transform(in: ParsedFile): ParsedFile =
     if (!test.test(in)) in else transforms.foldLeft(in)((pf, t) => t.transform(pf))
+
+  override def toString = "TestAndTransform("+test+", "+transforms.map(_.toString).mkString(", ")+")"
 }
 
 case object UpdatePathRootTransform extends Transformer {
@@ -220,6 +242,8 @@ case object UpdatePathRootTransform extends Transformer {
     runTest(env.isArticle, ArticleRootKey) or
     runTest(env.isEvent, EventRootKey) openOr in
   }
+
+  override def toString = "UpdatePathRoot"
 }
 
 object CondTransform {
@@ -228,6 +252,8 @@ object CondTransform {
 class CondTransform(maybeTrans: => Iterable[Transformer]) extends Transformer {
   def transformsKey(toTest: MetadataKey): Boolean = maybeTrans.find(_.transformsKey(toTest)).isDefined
   def transform(in: ParsedFile): ParsedFile = maybeTrans.foldLeft(in)((pf, t) => t.transform(pf))
+
+  override def toString = "CondTransform("+maybeTrans.map(_.toString()).mkString(", ")+")"
 }
 
 case object PassThruTransform extends CondTransform(Nil)
@@ -299,7 +325,8 @@ case class SetValueOnTestTransform(key: MetadataKey,
         }
       case _ => in
     }
-
   }
+
+  override def toString = "SetValueOnTest("+key+", "+newVal+", "+test+")"
 }
 

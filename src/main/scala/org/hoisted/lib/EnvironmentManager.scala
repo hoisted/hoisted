@@ -309,7 +309,14 @@ class EnvironmentManager(externRepoLoader: Box[(String, EnvironmentManager, File
     first ::: (if (!forceMerge) {
       second.filter(pf => !curSet.contains(pf.fileInfo.pathAndSuffix))
     } else {
-      second // FIXME move conflicting pages
+      def fixConflict(in: ParsedFile): ParsedFile =
+      if (!curSet.contains(in.fileInfo.pathAndSuffix)) in else {
+        val old = in.fileInfo.pathAndSuffix
+        val newer = old.copy(path = old.path.dropRight(1) ::: old.path.takeRight(1).map(_ + "_dup"))
+        fixConflict(in.updateFileInfo(newer.toFileInfo(in.fileInfo.file)))
+      }
+
+      second.map(fixConflict _)
     })
   }
 
@@ -479,67 +486,6 @@ class EnvironmentManager(externRepoLoader: Box[(String, EnvironmentManager, File
 
   private def _transformFile: ParsedFile => ParsedFile =
   pf => mdXFormRules.foldLeft(pf){(file, func) => func.apply(file)}
-
-
-  /*
-  private def _updateMetadata: (MetadataValue, FileInfo) => MetadataValue =
-    (md, fi) => {
-      var fixedMd = md
-      var pathling = fi.name
-
-      // test to see if it's a post
-      fixedMd.findBoolean(PostKey) match {
-        case Full(_) => // do nothing
-        case _ => fixedMd.findString(LayoutKey).map(_.toLowerCase) match {
-          case Full("post") => fixedMd = fixedMd +&+ KeyedMetadataValue(PostKey, true)//  set(fixedMd, PostKey, Full(this), true)
-          case Full(_) => // do nothing
-          case _ => fi.pathAndSuffix.path match {
-            case "_post" :: _ => fixedMd = fixedMd +&+ KeyedMetadataValue(PostKey, true)
-            case "_posts" :: _ => fixedMd = fixedMd +&+ KeyedMetadataValue(PostKey, true)
-            case _ => // do nothing
-          }
-        }
-      }
-
-      // test to see if it's an event
-      findBoolean(EventKey, fixedMd) match {
-        case Full(_) => // do nothing
-        case _ => findString(LayoutKey, fixedMd).map(_.toLowerCase) match {
-          case Full("event") => fixedMd = set(fixedMd, EventKey, Full(this), true)
-          case Full(_) => // do nothing
-          case _ => fi.pathAndSuffix.path match {
-            case "_event" :: _ => fixedMd = set(fixedMd, EventKey, Full(this), true)
-            case _ => // do nothing
-          }
-        }
-      }
-
-      // deal with the date
-      findDate(DateKey, fixedMd) match {
-        case Full(_) =>
-        case _ => findDate(ValidFromKey, fixedMd) match {
-          case Full(date) => fixedMd = set(fixedMd, DateKey, Full(this), date)
-          case _ =>
-            ParsedFile.uglyParseDate(fi.name) match {
-              case Full(date) => fixedMd = set(fixedMd, DateKey, Full(this), date)
-                val rx = """^([0-9]{2,4}-[0-9]{1,2}-[0-9]{1,2})-+(.*)""".r
-                rx.findFirstMatchIn(fi.name).foreach(m => pathling = m.group(2))
-              case _ => fixedMd = set(fixedMd, DateKey, Full(this),
-                fi.file.map(ff => new DateTime(ff.lastModified())).getOrElse(new DateTime()))
-            }
-        }
-      }
-
-      if (findBoolean(PostKey, fixedMd) or findBoolean(EventKey, fixedMd) openOr false) {
-        fixedMd = set(fixedMd, OutputPathKey, Full(this), "/"+pathling)
-      }
-
-      val ret = KeyedMetadataValue(fixedMd)
-
-      ret.flatten.filter(_._1.global).foreach(v => this.appendMetadata(v._1, v._2))
-
-      ret
-    }*/
 
   def insureHtmlSuffix: String => String = str => multiSlash.replaceAllIn( (str.trim.toLowerCase match {
     case s if s.endsWith(".html")  => s
