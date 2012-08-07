@@ -507,13 +507,19 @@ object BaseSnippets extends LazyLoggableWithImplicitLogger {
       css <- (ns.collect {
         case e: Elem => e
       }.flatMap(_.attribute("data-css")).headOption.map(_.text): Option[String])
-      thing: NodeSeq = S.attr("kids").
+
+      thing: NodeSeq = (S.attr("kids").
         flatMap(Helpers.asBoolean).
         filter(a => a).map(ignore => ns.collect {
         case e: Elem => e
       }.flatMap(_.child): NodeSeq) openOr
-        (("* [data-css]" #> (None: Option[String])).apply(ns))
-      xf <- (HoistedUtil.logFailure("Creating CSS xform for "+css+" with right side "+thing)(css #> thing): Box[NodeSeq => NodeSeq])
+        (("* [data-css]" #> (None: Option[String])).apply(ns))) match {
+        case ns if S.attr("text").flatMap(Helpers.asBoolean) == Full(true) => Text(ns.text)
+        case ns => ns
+      }
+
+
+      xf <- (HoistedUtil.logFailure("Creating CSS xform for " + css + " with right side " + thing)(css #> thing): Box[NodeSeq => NodeSeq])
     } {
       PostPageTransforms.set(PostPageTransforms.get :+ xf)
     }
