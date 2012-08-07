@@ -513,11 +513,7 @@ object BaseSnippets extends LazyLoggableWithImplicitLogger {
         filter(a => a).map(ignore => ns.collect {
         case e: Elem => e
       }.flatMap(_.child): NodeSeq) openOr
-        (("* [data-css]" #> (None: Option[String])).apply(ns))) match {
-        case ns if S.attr("text").flatMap(Helpers.asBoolean) == Full(true) => Text(ns.text)
-        case ns => ns
-      }
-
+        (("* [data-css]" #> (None: Option[String])).apply(ns)))
 
       xf <- (HoistedUtil.logFailure("Creating CSS xform for " + css + " with right side " + thing)(css #> thing): Box[NodeSeq => NodeSeq])
     } {
