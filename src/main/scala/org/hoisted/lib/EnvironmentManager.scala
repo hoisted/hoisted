@@ -10,7 +10,7 @@ import Helpers._
 import org.joda.time.DateTime
 import org.eclipse.jgit.api.Git
 import java.io.{PrintWriter,  File}
-import xml.{Node, NodeSeq}
+import xml.{Text, Elem, Node, NodeSeq}
 import org.joda.time.format.{DateTimeFormat, DateTimeFormatter}
 
 /**
@@ -34,12 +34,19 @@ class EnvironmentManager(externRepoLoader: Box[(String, EnvironmentManager, File
   private var postRun: Vector[() => Unit] = Vector()
 
   def menuTitle: NodeSeq => NodeSeq = ns => {
-    ("* *+" #> (
-      CurrentFile.box.map(computeTitle) openOr "Telegram Site")).apply(ns)
+    val value = CurrentFile.box.map(computeTitle) openOr "Telegram Site"
+
+    if (ns.collect{
+      case e: Elem => e
+    }.isDefined)   ("* *+" #> value).apply(ns) else Text(value)
   }
 
   def siteName: NodeSeq => NodeSeq = ns => {
-    ("* *" #> (metadata.findString(SiteNameKey) openOr "Telegram")).apply(ns)
+    val value = (metadata.findString(SiteNameKey) openOr "Telegram")
+    if (ns.collect{
+      case e: Elem => e
+    }.isDefined)
+    ("* *" #> value).apply(ns) else Text(value)
   }
 
   def menuItems: NodeSeq => NodeSeq = ns => {
