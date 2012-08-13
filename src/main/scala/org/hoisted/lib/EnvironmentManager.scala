@@ -21,12 +21,24 @@ import org.joda.time.format.{DateTimeFormat, DateTimeFormatter}
  * To change this template use File | Settings | File Templates.
  */
 
-class EnvironmentManager(externRepoLoader: Box[(String, EnvironmentManager, File) => Box[Boolean]] = Empty) extends LazyLoggableWithImplicitLogger {
+trait HoistedPhase {
+  def environment: EnvironmentManager
+}
+
+final case class PostRenderPhase(location: File, environment: EnvironmentManager) extends HoistedPhase
+
+class EnvironmentManager(val pluginPhase: PartialFunction[HoistedPhase, Unit] = Map.empty,
+                         val additionalKeys: List[MetadataKey] = Nil,
+                         val runWrapper: CommonLoanWrapper = new CommonLoanWrapper {
+                           def apply[T](f: => T): T = f
+                         },
+                         val externRepoLoader: Box[(String, EnvironmentManager, File) => Box[Boolean]] = Empty) extends LazyLoggableWithImplicitLogger {
   val startTime = Helpers.millis
   private var _metadata: MetadataValue = NullMetadataValue
   var menuEntries: List[MenuEntry] = Nil
   var pages: List[ParsedFile] = Nil
   var allPages: List[ParsedFile] = Nil
+
   def metadata: MetadataValue = _metadata
 
   def blogPosts: List[ParsedFile] = computePosts(pages)
@@ -36,17 +48,19 @@ class EnvironmentManager(externRepoLoader: Box[(String, EnvironmentManager, File
   def menuTitle: NodeSeq => NodeSeq = ns => {
     val value = CurrentFile.box.map(computeTitle) openOr "Telegram Site"
 
-    if (ns.collect{
+    if (ns.collect {
       case e: Elem => e
-    }.isDefined)   ("* *+" #> value).apply(ns) else Text(value)
+    }.isDefined) ("* *+" #> value).apply(ns)
+    else Text(value)
   }
 
   def siteName: NodeSeq => NodeSeq = ns => {
     val value = (metadata.findString(SiteNameKey) openOr "Telegram")
-    if (ns.collect{
+    if (ns.collect {
       case e: Elem => e
     }.isDefined)
-    ("* *" #> value).apply(ns) else Text(value)
+      ("* *" #> value).apply(ns)
+    else Text(value)
   }
 
   def menuItems: NodeSeq => NodeSeq = ns => {
@@ -61,8 +75,9 @@ class EnvironmentManager(externRepoLoader: Box[(String, EnvironmentManager, File
     postRun = postRun :+ f
   }
 
-  def runPostRun() {
+  def runPostRun(file: File) {
     postRun.foreach(f => HoistedUtil.logFailure("Post Run")(f()))
+    runPhase(PostRenderPhase(file, this))
   }
 
   /**
@@ -83,6 +98,10 @@ class EnvironmentManager(externRepoLoader: Box[(String, EnvironmentManager, File
     }
 
     ret
+  }
+
+  def runPhase(phase: HoistedPhase): Unit = {
+    HoistedUtil.logFailure("Run phase "+phase)(if (pluginPhase.isDefinedAt(phase)) pluginPhase.apply(phase))
   }
 
   def beginRendering: ParsedFile => Unit = pf => ()
@@ -279,7 +298,7 @@ class EnvironmentManager(externRepoLoader: Box[(String, EnvironmentManager, File
     (pf.fileInfo.file.map(ff => new DateTime(ff.lastModified()))) openOr new DateTime()
 
   def shouldWriteFile: ParsedFile => Boolean =
-    pf => {
+    pf => !pf.neverWrite && {
       pf.findData(ServeKey).flatMap(_.asBoolean) openOr (pf.pathAndSuffix.path match {
         case "templates-hidden" :: _ => false
         case x => x.filter(_.startsWith("_")).isEmpty ||
@@ -304,9 +323,9 @@ class EnvironmentManager(externRepoLoader: Box[(String, EnvironmentManager, File
    * compute the URL of the Git repo with the template in it
    */
   def computeTemplateURL: () => String =
-    () => (findMetadata(TemplateURLKey).flatMap(_.asString).filter(
+    () => (findMetadata(TemplateURLKey).flatMap(_.asString) /*.filter(
       s => s.startsWith("http") && s.endsWith(".git")
-    )) openOr "https://github.com/telegr-am/template-base.git"
+    )*/) openOr "https://github.com/telegr-am/template-base.git"
 
   def mergeTemplateSets(first: List[ParsedFile], second: List[ParsedFile], forceMerge: Boolean): List[ParsedFile] = {
 
@@ -348,7 +367,7 @@ class EnvironmentManager(externRepoLoader: Box[(String, EnvironmentManager, File
 
   def loadTemplates: (String, List[ParsedFile], Boolean) => Box[List[ParsedFile]] = (url, cur, forceMerge) => {
     val dir = File.createTempFile("telegram_", "_template")
-    addToPostRun(() => RunHoisted.deleteAll(dir))
+    addToPostRun(() => HoistedUtil.deleteAll(dir))
 
     for {
       cloned <- HoistedUtil.reportFailure("Trying to load resource " + url)(loadRepoIntoDir(url, dir))
@@ -691,9 +710,8 @@ class EnvironmentManager(externRepoLoader: Box[(String, EnvironmentManager, File
         false
       }else {
       def computeValidFrom: Boolean =
-        pf.findData(ValidFromKey).flatMap(_.asDate).map(_.getMillis < startTime) or
-          pf.findData(DateKey).flatMap(_.asDate).map(_.getMillis < startTime) or
-          pf.fileInfo.file.map(_.lastModified() < startTime) openOr false
+        pf.findDate(ValidFromKey).map(_.getMillis < Helpers.millis) or
+          pf.findDate(DateKey).map(_.getMillis < Helpers.millis) openOr true
 
       pf.findData(ValidToKey).flatMap(_.asDate).map(_.getMillis > startTime) match {
         case Full(true) => computeValidFrom

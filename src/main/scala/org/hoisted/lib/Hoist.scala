@@ -34,6 +34,19 @@ trait LazyLoggableWithImplicitLogger extends LazyLoggable {
 }
 
 object HoistedUtil {
+  /*
+ * Recursively delete files, directories, etc.
+  */
+  def deleteAll(f: File) {
+    if ((null eq f) || !f.exists()) {} else {
+      if (f.isDirectory()) {
+        f.listFiles().foreach(deleteAll)
+        f.delete()
+      } else f.delete()
+    }
+  }
+
+
   /**
    * Execute some code and if it throws an exception, turn the exception
    * into a Failure and log the failure
@@ -146,4 +159,7 @@ object DateUtils {
       case _ => uglyParseDate(str.dropRight(1))
     }
   }
+
+
+
 }

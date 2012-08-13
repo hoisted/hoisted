@@ -78,6 +78,8 @@ object YamlUtil extends LazyLoggableWithImplicitLogger {
       case x => x
     }
 
-    HoistedUtil.logFailure("YAML Parser for:\n"+incoming)(flatten(objToMetadata(yaml.loadAll(incoming))))
+    val _incoming = incoming.replace("\t", "    ")
+
+    HoistedUtil.logFailure("YAML Parser for:\n"+incoming)(flatten(objToMetadata(yaml.loadAll(_incoming))))
   }
 }

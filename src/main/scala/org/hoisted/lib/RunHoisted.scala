@@ -11,38 +11,12 @@ import Helpers._
 import java.util.Locale
 import java.io._
 import xml._
-import org.slf4j.LoggerFactory
-import ch.qos.logback.classic.LoggerContext
-import ch.qos.logback.classic.joran.JoranConfigurator
 
 object VeryTesty {
 
-  val xml =
-    """
-      |<configuration>
-      |  <appender name="STDOUT" class="org.hoisted.lib.PerThreadLogger">
-      |    <encoder class="ch.qos.logback.classic.encoder.PatternLayoutEncoder">
-      |      <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} %X{file_name} - %msg%n</pattern>
-      |    </encoder>
-      |  </appender>
-      |
-      |  <root level="info">
-      |    <appender-ref ref="STDOUT" />
-      |  </root>
-      |</configuration>
-    """.stripMargin
 
   def apply() = {
 
-    Logger.setup = Full(() => {
-    val lc = LoggerFactory.getILoggerFactory().asInstanceOf[LoggerContext];
-    val configurator = new JoranConfigurator();
-    configurator.setContext(lc);
-    // the context was probably already configured by default configuration rules
-    lc.reset();
-      val is: InputStream= new ByteArrayInputStream(xml.getBytes)
-      configurator.doConfigure(is)
-    })
 
     RunHoisted(new File("/Users/dpp/proj/plaything"), new File("/Users/dpp/tmp/outfrog")).map(_.logs)
   }
@@ -101,11 +75,11 @@ trait HoistedRenderer extends LazyLoggableWithImplicitLogger {
     val in = _in.map(env.transformFile)
 
     val withLoadedTemplates =
-    env.findMetadata(ExternalLinkKey) match {
-      case Full(ListMetadataValue(lst)) => lst.foldLeft(in)(loadExternal)
-      case Full(md) => loadExternal(in, md)
-      case _ => in
-    }
+      env.findMetadata(ExternalLinkKey) match {
+        case Full(ListMetadataValue(lst)) => lst.foldLeft(in)(loadExternal)
+        case Full(md) => loadExternal(in, md)
+        case _ => in
+      }
 
     Full(withLoadedTemplates)
   }
@@ -133,7 +107,7 @@ trait HoistedRenderer extends LazyLoggableWithImplicitLogger {
         case e: EmptyBox => in
         case Full(str) if !curSet.contains(str) => in
         case Full(str) =>
-          fixConflict(in.updateMetadata(OutputPathKey, str+"_dup"))
+          fixConflict(in.updateMetadata(OutputPathKey, str + "_dup"))
       }
     }
 
@@ -142,30 +116,31 @@ trait HoistedRenderer extends LazyLoggableWithImplicitLogger {
 
   def loadExternal(cur: List[ParsedFile], info: MetadataValue): List[ParsedFile] = {
     info match {
-    case k: KeyedMetadataValue =>
+      case k: KeyedMetadataValue =>
 
-      (HoistedUtil.reportFailure("Trying to fetch external resource for "+k)(for {
-        url <- k.findString(UrlKey) ?~ ("Failed to get URL for external link in "+k)
+        (HoistedUtil.reportFailure("Trying to fetch external resource for " + k)(for {
+          url <- k.findString(UrlKey) ?~ ("Failed to get URL for external link in " + k)
 
-        first_prime <- env.loadTemplates(url, Nil, false)
-        first = dedupNames(cur, first_prime)
-        xform = env.metadataTransformRules ::: Transformer.listFromMetadata(k)
-        tests = TransformTest.fromMetadata(k)
-        xformed = first.map(f => xform.foldLeft(f)((pf, func) => func(pf)))
-        filtered = env.removeRemoved(xformed.filter(tests))
-        filtered_2 = dedupPaths(cur, filtered)
-      } yield env.mergeTemplateSets(cur, filtered_2, true))) openOr cur
-    case md =>
-      (HoistedUtil.reportFailure("Trying to fetch external resource for "+md)(for {
-        url <- md.asString ?~ ("Couldn't turn "+md+" into a URL")
-        first_prime <- env.loadTemplates(url, Nil, true)
-        first = dedupNames(cur, first_prime)
-        xform = env.metadataTransformRules
-        xformed = first.map(f => xform.foldLeft(f)((pf, func) => func(pf)))
-        filtered = env.removeRemoved(xformed)
-        filtered_2 = dedupPaths(cur, filtered)
-      } yield env.mergeTemplateSets(cur, filtered_2, true))) openOr cur
-  }}
+          first_prime <- env.loadTemplates(url, Nil, false)
+          first = dedupNames(cur, first_prime)
+          xform = env.metadataTransformRules ::: Transformer.listFromMetadata(k)
+          tests = TransformTest.fromMetadata(k)
+          xformed = first.map(f => xform.foldLeft(f)((pf, func) => func(pf)))
+          filtered = env.removeRemoved(xformed.filter(tests))
+          filtered_2 = dedupPaths(cur, filtered)
+        } yield env.mergeTemplateSets(cur, filtered_2, true))) openOr cur
+      case md =>
+        (HoistedUtil.reportFailure("Trying to fetch external resource for " + md)(for {
+          url <- md.asString ?~ ("Couldn't turn " + md + " into a URL")
+          first_prime <- env.loadTemplates(url, Nil, true)
+          first = dedupNames(cur, first_prime)
+          xform = env.metadataTransformRules
+          xformed = first.map(f => xform.foldLeft(f)((pf, func) => func(pf)))
+          filtered = env.removeRemoved(xformed)
+          filtered_2 = dedupPaths(cur, filtered)
+        } yield env.mergeTemplateSets(cur, filtered_2, true))) openOr cur
+    }
+  }
 
   /**
    * Do an initial pass on the files to include other files
@@ -177,7 +152,7 @@ trait HoistedRenderer extends LazyLoggableWithImplicitLogger {
     env.pages = in.filter(env.isValid)
 
     val templates = createTemplateLookup(env.pages)
-    Full(in.map{
+    Full(in.map {
       case f if env.isHtml(f) && env.shouldWriteFile(f) =>
         runTemplater(f, templates, true, env.earlySnippets)
       case other => other
@@ -185,7 +160,7 @@ trait HoistedRenderer extends LazyLoggableWithImplicitLogger {
   }
 
   def updateHeaderMetadata(in: List[ParsedFile]): Box[List[ParsedFile]] = {
-    Full(in.map{
+    Full(in.map {
       case h: HasHtml =>
         val (html, metadata) = ParsedFile.findHeaders(h.html)
         h.updateHtml(html).updateMetadata(h.metaData +&+ metadata)
@@ -193,61 +168,76 @@ trait HoistedRenderer extends LazyLoggableWithImplicitLogger {
     })
   }
 
+  private def avoidScalaNamingHell(__parsedFiles_2: List[ParsedFile],
+                                   log: ByteArrayOutputStream,
+                                   inDir: File, outDir: File): Box[HoistedTransformMetaData] = {
+
+    for {
+      __parsedFiles_3 <- updateHeaderMetadata(env.removeRemoved(__parsedFiles_2))
+      __parsedFiles = env.removeRemoved(__parsedFiles_3)
+      _ = env.allPages = __parsedFiles
+      _parsedFiles = __parsedFiles.filter(env.isValid)
+      parsedFilesPrime <- ensureTemplates(_parsedFiles)
+
+      _ = {
+        if (env.hasBlogPosts(parsedFilesPrime)) {
+          env.setMetadata(HasBlogKey, BooleanMetadataValue(true))
+        }
+      }
+
+      parsedFiles = env.filterBasedOnMetadata(parsedFilesPrime)
+
+      _ = HoistedEnvironmentManager.value.pages = parsedFiles
+
+      fileMap = byName(parsedFiles)
+      templates = createTemplateLookup(parsedFiles)
+      menu = env.computeMenuItems(parsedFiles)
+      _ = env.menuEntries = menu
+
+      transformedFiles = (env.syntheticFiles(parsedFiles).toList ::: parsedFiles).map(f =>
+        runTemplater(f, templates, false, env.snippets))
+
+      aliases = {
+        val ret = transformedFiles.flatMap(pf =>
+          pf.findData(AliasKey).toList.flatMap(_.forceListString).map(a => Alias(a, env.computeOutputFileName(pf)))
+        ).toList
+
+        ret
+      }
+
+      done <- HoistedUtil.logFailure("Writing rendered files")(writeFiles(transformedFiles, inDir, outDir))
+      _ = HoistedUtil.logFailure("Post run")(env.runPostRun(outDir))
+    } yield HoistedTransformMetaData(new String(log.toByteArray), transformedFiles, env.metadata, env, aliases)
+  }
+
   def apply(_inDir: File, outDir: File, environment: EnvironmentManager = new EnvironmentManager): Box[HoistedTransformMetaData] = {
-    if ((null eq _inDir) || !_inDir.exists()) Failure("No valid source directory "+_inDir) else {
+    environment.runWrapper {
+      val special = environment.additionalKeys.flatMap(k => (k.key :: k.alt).map(_.trim.toLowerCase).map(_ -> k)).
+        foldLeft(MetadataKey.special)(_ + _)
+      MetadataKey.localSpecial.doWith(special) {
+        if ((null eq _inDir) || !_inDir.exists()) Failure("No valid source directory " + _inDir)
+        else {
 
-    val log = new ByteArrayOutputStream()
-    Logstream.doWith(log) {
-      HoistedEnvironmentManager.doWith(environment) {
-        val __inDir = seekInDir(_inDir)
-        for {
-          deleteAll <- HoistedUtil.logFailure("Deleting all files in "+outDir)(deleteAll(outDir))
-          theDir <- HoistedUtil.logFailure("Making dir "+outDir)(outDir.mkdirs())
-          inDir <- Full(__inDir).filter(_.exists()) ?~ "Failed to get source repository"
-          orgFiles <- HoistedUtil.reportFailure("Loading files from "+inDir)(env.loadFilesFrom(inDir))
-          __parsedFiles_1 <- doMetadataMagicAndSuch(env.removeRemoved(orgFiles))
-          __parsedFiles_2 <- doInitialTemplating(env.removeRemoved(__parsedFiles_1))
-          __parsedFiles_3 <- updateHeaderMetadata(env.removeRemoved(__parsedFiles_2))
-          __parsedFiles = env.removeRemoved(__parsedFiles_3)
-          _ = env.allPages = __parsedFiles
-          _parsedFiles = __parsedFiles.filter(env.isValid)
-          parsedFilesPrime <- ensureTemplates(_parsedFiles)
-
-          _ = {
-            if (env.hasBlogPosts(parsedFilesPrime)) {
-              env.setMetadata(HasBlogKey, BooleanMetadataValue(true))
+          val log = new ByteArrayOutputStream()
+          Logstream.doWith(log) {
+            HoistedEnvironmentManager.doWith(environment) {
+              val __inDir = seekInDir(_inDir)
+              for {
+                deleteAll <- HoistedUtil.logFailure("Deleting all files in " + outDir)(HoistedUtil.deleteAll(outDir))
+                theDir <- HoistedUtil.logFailure("Making dir " + outDir)(outDir.mkdirs())
+                inDir <- Full(__inDir).filter(_.exists()) ?~ "Failed to get source repository"
+                orgFiles <- HoistedUtil.reportFailure("Loading files from " + inDir)(env.loadFilesFrom(inDir))
+                __parsedFiles_1 <- doMetadataMagicAndSuch(env.removeRemoved(orgFiles))
+                __parsedFiles_2 <- doInitialTemplating(env.removeRemoved(__parsedFiles_1))
+                res <- avoidScalaNamingHell(__parsedFiles_2, log, inDir, outDir)
+              } yield res
             }
           }
-
-          parsedFiles = env.filterBasedOnMetadata(parsedFilesPrime)
-
-          _ = HoistedEnvironmentManager.value.pages = parsedFiles
-
-
-          fileMap = byName(parsedFiles)
-          templates = createTemplateLookup(parsedFiles)
-          menu = env.computeMenuItems(parsedFiles)
-          _ = env.menuEntries = menu
-
-
-          transformedFiles = (env.syntheticFiles(parsedFiles).toList ::: parsedFiles).map(f =>
-            runTemplater(f, templates, false, env.snippets))
-
-        aliases = {
-          val ret = transformedFiles.flatMap(pf =>
-            pf.findData(AliasKey).toList.flatMap(_.forceListString).map(a => Alias(a, env.computeOutputFileName(pf)))
-          ).toList
-
-          ret
         }
-
-          done <- HoistedUtil.logFailure("Writing rendered files")(writeFiles(transformedFiles, inDir, outDir))
-          _ = env.runPostRun()
-        } yield HoistedTransformMetaData(new String(log.toByteArray), transformedFiles, env.metadata, env, aliases)
       }
     }
-    }
   }
+
 
   def ensureTemplates(in: List[ParsedFile]): Box[List[ParsedFile]] =
     if (env.needsTemplates(in)) {
@@ -287,14 +277,14 @@ trait HoistedRenderer extends LazyLoggableWithImplicitLogger {
     toWrite.foreach {
       pf =>
         if (env.shouldWriteFile(pf)) {
-        val where: File = calcFile(pf)
+          val where: File = calcFile(pf)
           where.getParentFile.mkdirs()
           val out = new FileOutputStream(where)
           try {
             pf.writeTo(out)
           } finally {
-            HoistedUtil.logFailure("Trying to flush "+pf.pathAndSuffix)(out.flush())
-            HoistedUtil.logFailure("Trying to close "+pf.pathAndSuffix)(out.close())
+            HoistedUtil.logFailure("Trying to flush " + pf.pathAndSuffix)(out.flush())
+            HoistedUtil.logFailure("Trying to close " + pf.pathAndSuffix)(out.close())
           }
           // where.setLastModified(env.computeDate(pf).getMillis)
         }
@@ -316,138 +306,138 @@ trait HoistedRenderer extends LazyLoggableWithImplicitLogger {
   def env = HoistedEnvironmentManager.value
 
   def runTemplater(_f: ParsedFile, templates: TemplateLookup, ignoreTemplateFailure: Boolean,
-                    snippets: PartialFunction[(String, String), Box[NodeSeq => NodeSeq]]): ParsedFile = {
+                   snippets: PartialFunction[(String, String), Box[NodeSeq => NodeSeq]]): ParsedFile = {
     _f match {
       case f: ParsedFile with HasHtml if HoistedEnvironmentManager.value.isHtml(f) =>
 
-    val lu = new PartialFunction[(Locale, List[String]), Box[NodeSeq]] {
-      def isDefinedAt(in: (Locale, List[String])): Boolean = {
+        val lu = new PartialFunction[(Locale, List[String]), Box[NodeSeq]] {
+          def isDefinedAt(in: (Locale, List[String])): Boolean = {
 
-        true
-      }
-
-      def apply(in: (Locale, List[String])): Box[NodeSeq] = {
-        lazy val html = if (templates.isDefinedAt((in._2, "html"))) {
-          val ret = templates((in._2, "html"))
-          ret match {
-            case h: HasHtml => Full(h.html)
-            case _ => Empty
+            true
           }
-        } else {
-          Empty
+
+          def apply(in: (Locale, List[String])): Box[NodeSeq] = {
+            lazy val html = if (templates.isDefinedAt((in._2, "html"))) {
+              val ret = templates((in._2, "html"))
+              ret match {
+                case h: HasHtml => Full(h.html)
+                case _ => Empty
+              }
+            } else {
+              Empty
+            }
+
+            lazy val markdown =
+              if (templates.isDefinedAt((in._2, "md"))) {
+                val ret = templates((in._2, "md"))
+                ret match {
+                  case h: HasHtml => Full(h.html)
+                  case _ => Empty
+                }
+              } else {
+                Empty
+              }
+
+            lazy val xml =
+              if (templates.isDefinedAt((in._2, "xml"))) {
+                val ret = templates((in._2, "xml"))
+                ret match {
+                  case h: HasHtml => Full(h.html)
+                  case _ => Empty
+                }
+              } else {
+                Empty
+              }
+
+            lazy val xml_cms =
+              if (templates.isDefinedAt((in._2, "cms.xml"))) {
+                val ret = templates((in._2, "cms.xml"))
+                ret match {
+                  case h: HasHtml if HoistedEnvironmentManager.value.isHtml(ret) => Full(h.html)
+                  case _ => Empty
+                }
+              } else {
+                Empty
+              }
+
+            html or markdown or xml or xml_cms
+          }
         }
 
-        lazy val markdown =
-          if (templates.isDefinedAt((in._2, "md"))) {
-            val ret = templates((in._2, "md"))
-            ret match {
-              case h: HasHtml => Full(h.html)
-              case _ => Empty
-            }
+        val session = new LiftSession("", Helpers.nextFuncName, Empty) with StatelessSession {
+          override def stateful_? = false
+        }
+
+        def insureChrome(todo: ParsedFile, node: NodeSeq): NodeSeq = {
+          if (ignoreTemplateFailure) {
+            node
           } else {
-            Empty
-          }
-
-        lazy val xml =
-          if (templates.isDefinedAt((in._2, "xml"))) {
-            val ret = templates((in._2, "xml"))
-            ret match {
-              case h: HasHtml => Full(h.html)
-              case _ => Empty
+            val _processed = if ((node \\ "html" \\ "body").length > 0) node
+            else {
+              val templateName = env.chooseTemplateName(todo)
+              val res = session.processSurroundAndInclude("Surrounding page " + todo.fileInfo.pathAndSuffix + " with template: " + templateName, <lift:surround with={templateName} at="content">
+                {node}
+              </lift:surround>)
+              res
             }
-          } else {
-            Empty
+
+            val _processed1 = PostPageTransforms.get.foldLeft(_processed)((ns, f) => f(ns))
+            val processed = session.processSurroundAndInclude("Post transforms for " + todo.fileInfo.pathAndSuffix, env.computeTransforms(todo).foldLeft(_processed1)((ns, f) => f(ns)))
+
+            session.processSurroundAndInclude("Post merge transforms for " + todo.fileInfo.pathAndSuffix,
+              env.computePostMergeTransforms(todo).foldLeft[NodeSeq](session.merge(processed, Req.nil))((ns, f) => f(ns)))
           }
+        }
 
-        lazy val xml_cms =
-          if (templates.isDefinedAt((in._2, "cms.xml"))) {
-            val ret = templates((in._2, "cms.xml"))
-            ret match {
-              case h: HasHtml if HoistedEnvironmentManager.value.isHtml(ret) => Full(h.html)
-              case _ => Empty
-            }
-          } else {
-            Empty
+        def snippetFailure(in: SnippetFailure) {
+          import SnippetFailures._
+
+          in match {
+            case SnippetFailure(page, Full(snippet), MethodNotFound) =>
+              logger.error("Trying to execute snippet " + snippet + " but could not find the method on the snippet instance object")
+            case SnippetFailure(page, Full(snippet), ExecutionFailure) => logger.error("Failure while executing snippet " + snippet)
+            case SnippetFailure(page, Full(snippet), InstantiationException) =>
+              logger.error("Trying to instantiate class the provides snippet " + snippet + " but failed")
+
+            case SnippetFailure(page, Full(snippet), ClassNotFound) =>
+              logger.error("Could not find any providers for the snippet named '" + snippet + "'.  Perhaps you mis-typed the name of the snippet in the data-lift='" + snippet + "' attribute.")
+            case _ => logger.info("Snippet Failure: " + in)
           }
+        }
 
-        html or markdown or xml or xml_cms
-      }
-    }
+        MDC.clear()
+        S.initIfUninitted(session) {
+          S.runSnippetsWithIgnoreFailed(ignoreTemplateFailure) {
+            LiftRules.snippetFailedFunc.prependWith(snippetFailure _) {
+              LiftRules.autoIncludeAjaxCalc.doWith(() => ignore => false) {
+                LiftRules.allowParallelSnippets.doWith(() => false) {
+                  LiftRules.allowAttributeSnippets.doWith(() => false) {
+                    LiftRules.snippetWhiteList.doWith(() => snippets) {
+                      LiftRules.externalTemplateResolver.doWith(() => () => lu) {
+                        CurrentFile.doWith(f) {
+                          MDC.put("file_name" -> f.pathAndSuffix.display)
+                          env.beginRendering(f)
+                          try {
+                            f match {
+                              case todo: ParsedFile with HasHtml if HoistedEnvironmentManager.value.isHtml(todo) =>
+                                val revised: NodeSeq = insureChrome(todo,
+                                  session.processSurroundAndInclude(todo.pathAndSuffix.display, todo.html))
 
-    val session = new LiftSession("", Helpers.nextFuncName, Empty) with StatelessSession {
-      override def stateful_? = false
-    }
-
-    def insureChrome(todo: ParsedFile, node: NodeSeq): NodeSeq = {
-      if (ignoreTemplateFailure) {
-        node
-      } else {
-      val _processed = if ((node \\ "html" \\ "body").length > 0) node
-      else {
-        val templateName = env.chooseTemplateName(todo)
-        val res = session.processSurroundAndInclude("Surrounding page "+todo.fileInfo.pathAndSuffix+" with template: "+templateName, <lift:surround with={templateName} at="content">
-          {node}
-        </lift:surround>)
-        res
-      }
-
-      val _processed1 = PostPageTransforms.get.foldLeft(_processed)((ns, f) => f(ns))
-      val processed =  session.processSurroundAndInclude("Post transforms for "+todo.fileInfo.pathAndSuffix,env.computeTransforms(todo).foldLeft(_processed1)((ns, f) => f(ns)))
-
-      session.processSurroundAndInclude("Post merge transforms for "+todo.fileInfo.pathAndSuffix,
-      env.computePostMergeTransforms(todo).foldLeft[NodeSeq](session.merge(processed, Req.nil))((ns, f) => f(ns)))
-      }
-    }
-
-    def snippetFailure(in: SnippetFailure) {
-      import SnippetFailures._
-
-      in match {
-        case SnippetFailure(page, Full(snippet), MethodNotFound) =>
-          logger.error("Trying to execute snippet "+snippet+" but could not find the method on the snippet instance object")
-        case SnippetFailure(page, Full(snippet), ExecutionFailure) => logger.error("Failure while executing snippet "+snippet)
-        case SnippetFailure(page, Full(snippet), InstantiationException) =>
-          logger.error("Trying to instantiate class the provides snippet "+snippet+" but failed")
-
-        case SnippetFailure(page, Full(snippet), ClassNotFound) =>
-          logger.error("Could not find any providers for the snippet named '"+snippet+"'.  Perhaps you mis-typed the name of the snippet in the data-lift='"+snippet+"' attribute.")
-        case _ => logger.info("Snippet Failure: "+in)
-      }
-    }
-
-    MDC.clear()
-    S.initIfUninitted(session) {
-      S.runSnippetsWithIgnoreFailed(ignoreTemplateFailure) {
-      LiftRules.snippetFailedFunc.prependWith(snippetFailure _) {
-      LiftRules.autoIncludeAjaxCalc.doWith(() => ignore => false) {
-        LiftRules.allowParallelSnippets.doWith(() => false) {
-          LiftRules.allowAttributeSnippets.doWith(() => false) {
-            LiftRules.snippetWhiteList.doWith(() => snippets) {
-              LiftRules.externalTemplateResolver.doWith(() => () => lu) {
-                CurrentFile.doWith(f) {
-                  MDC.put("file_name" -> f.pathAndSuffix.display)
-                  env.beginRendering(f)
-                  try {
-                    f match {
-                      case todo: ParsedFile with HasHtml if HoistedEnvironmentManager.value.isHtml(todo) =>
-                        val revised: NodeSeq = insureChrome(todo,
-                          session.processSurroundAndInclude(todo.pathAndSuffix.display, todo.html))
-
-                        todo.updateHtml(revised)
-                      case d => d
+                                todo.updateHtml(revised)
+                              case d => d
+                            }
+                          } finally {
+                            env.endRendering(f)
+                          }
+                        }
+                      }
                     }
-                  } finally {
-                    env.endRendering(f)
                   }
                 }
               }
             }
           }
         }
-      }
-    }
-      }
-    }
       case ret => ret
     }
   }
@@ -470,22 +460,12 @@ trait HoistedRenderer extends LazyLoggableWithImplicitLogger {
     }
   }
 
-  def deleteAll(f: File) {
-    if ((null eq f) || !f.exists()) {} else {
-      if (f.isDirectory()) {
-        f.listFiles().foreach(deleteAll)
-        f.delete()
-      } else f.delete()
-    }
-  }
-
-
 
 }
 
 final case class HoistedTransformMetaData(logs: String, files: Seq[ParsedFile],
                                           globalMetadata: MetadataValue,
                                           env: EnvironmentManager,
-                                           aliases: List[Alias])
+                                          aliases: List[Alias])
 
 

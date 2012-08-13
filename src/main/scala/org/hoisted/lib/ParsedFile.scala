@@ -29,61 +29,17 @@ object ParsedFile extends LazyLoggableWithImplicitLogger {
     (in \ "content").headOption.map(_.child) getOrElse in
 
 
-  /*
-
-
-    HWPFDocumentCore wordDocument = WordToHtmlUtils.loadDoc(new FileInputStream(file));
-
-    WordToHtmlConverter wordToHtmlConverter = new WordToHtmlConverter(
-            DocumentBuilderFactory.newInstance().newDocumentBuilder()
-                    .newDocument());
-    wordToHtmlConverter.processDocument(wordDocument);
-    Document htmlDocument = wordToHtmlConverter.getDocument();
-    ByteArrayOutputStream out = new ByteArrayOutputStream();
-    DOMSource domSource = new DOMSource(htmlDocument);
-    StreamResult streamResult = new StreamResult(out);
-
-    TransformerFactory tf = TransformerFactory.newInstance();
-    Transformer serializer = tf.newTransformer();
-    serializer.setOutputProperty(OutputKeys.ENCODING, "UTF-8");
-    serializer.setOutputProperty(OutputKeys.INDENT, "yes");
-    serializer.setOutputProperty(OutputKeys.METHOD, "html");
-    serializer.transform(domSource, streamResult);
-    out.close();
-
-
- */
-
   def apply(fi: FileInfo): Box[ParsedFile] = {
     fi.suffix.map(_.toLowerCase) match {
-        /*
+      case Some("yaml") =>
+        for {
+          realFile <- fi.file
+          fis <- HoistedUtil.logFailure("Trying to open file "+realFile)(new FileInputStream(realFile))
+          yaml <- HoistedUtil.logFailure("Trying to parse "+fi.pathAndSuffix.display)(new String(Helpers.readWholeStream(fis), "UTF-8"))
+          _ <- HoistedUtil.logFailure("Trying to close stream for file "+realFile)(fis.close())
+          metaData <- HoistedUtil.reportFailure("Parsing YAML file "+fi.pathAndSuffix.display)( YamlUtil.parse(yaml))
+        } yield YamlFile(fi, metaData)
 
-        /*
-
-scala> MD is Map(StringMetadataKey(line-count) -> StringMetadataValue(1), StringMetadataKey(creation-date) -> StringMetadataValue(2012-07-08T00:09:00Z),
- StringMetadataKey(last-author) -> StringMetadataValue(David Pollak), StringMetadataKey(page-count) -> StringMetadataValue(1),
- StringMetadataKey(revision-number) -> StringMetadataValue(1), StringMetadataKey(last-modified) -> StringMetadataValue(2012-07-08T17:38:00Z),
-  StringMetadataKey(content-type) -> StringMetadataValue(application/vnd.openxmlformats-officedocument.wordprocessingml.document),
-   StringMetadataKey(xmptpg:npages) -> StringMetadataValue(1), StringMetadataKey(paragraph-count) -> StringMetadataValue(1),
-   StringMetadataKey(application-name) -> StringMetadataValue(Microsoft Macintosh Word),
-   StringMetadataKey(application-version) -> StringMetadataValue(12.0000), DateKey -> StringMetadataValue(2012-07-08T00:09:00Z),
-   StringMetadataKey(total-time) -> StringMetadataValue(16), TemplateKey -> StringMetadataValue(Normal.dotm))
-MD is Map(StringMetadataKey(creation-date) -> StringMetadataValue(2012-07-08T18:56:00Z), StringMetadataKey(last-author) -> StringMetadataValue(David Pollak),
- StringMetadataKey(word-count) -> StringMetadataValue(41), StringMetadataKey(page-count) -> StringMetadataValue(1),
-  StringMetadataKey(revision-number) -> StringMetadataValue(2), StringMetadataKey(content-type) -> StringMetadataValue(application/msword),
-  StringMetadataKey(last-save-date) -> StringMetadataValue(2012-07-08T18:56:00Z), StringMetadataKey(subject) -> StringMetadataValue(),
-   StringMetadataKey(xmptpg:npages) -> StringMetadataValue(1), TitleKey -> StringMetadataValue(),
-    StringMetadataKey(application-name) -> StringMetadataValue(Microsoft Macintosh Word), StringMetadataKey(keywords) -> StringMetadataValue(),
-    StringMetadataKey(last-printed) -> StringMetadataValue(2012-07-08T18:55:00Z), StringMetadataKey(character count) -> StringMetadataValue(239),
-     TemplateKey -> StringMetadataValue(Normal.dotm), AuthorKey -> StringMetadataValue(David Pollak))
-MD is Map(AuthorKey -> StringMetadataValue(David Pollak), StringMetadataKey(content-type) -> ListMetadataValue(List(StringMetadataValue(application/rtf), StringMetadataValue(application/rtf))))
-SLF4J: Failed to load class "org.slf4j.impl.StaticLoggerBinder".
-SLF4J: Defaulting to no-operation (NOP) logger implementation
-SLF4J: See http://www.slf4j.org/codes.html#StaticLoggerBinder for further details.
-res0: net.liftweb.common.Box[org.hoisted.lib.HoistedTransformMetaData] = Full(HoistedTransformMetaData())
-         */
-
-*/
       case Some("xml") | Some("cms.xml") =>
         for {
           realFile <- fi.file
@@ -265,28 +221,6 @@ res0: net.liftweb.common.Box[org.hoisted.lib.HoistedTransformMetaData] = Full(Ho
       case (str, other) if str.trim.length > 0 => List(MetadataKey(str.toLowerCase.trim) -> other)
       case _ => Nil
     }
-
-  /*
-  def pairsToMetadata[T](in: List[(String, T)])(implicit buildMetadata: MetadataBuilder[T]): MetadataMeta.Metadata = {
-    filterNames(in).foldLeft[MetadataMeta.Metadata](Map()) {
-      case (m, (key, value)) if key.global =>
-        HoistedEnvironmentManager.value.appendMetadata(key, buildMetadata.build(value))
-        m
-      case (m, (key, value)) =>
-        append(m, key, buildMetadata.build(value))
-    }
-  }
-
-  def mergeMetadata(m1: MetadataMeta.Metadata, m2: MetadataMeta.Metadata): MetadataMeta.Metadata = {
-    m2.foldLeft(m1) {
-      case (map, (key, value)) => append(map, key, value)
-    }
-  }
-
-  def append(m1: MetadataMeta.Metadata, key: MetadataKey, value: MetadataValue): MetadataMeta.Metadata =
-    m1 + (key -> (m1.getOrElse(key, NullMetadataValue).append(value, key)))
-*/
-
 }
 
 
@@ -299,11 +233,20 @@ sealed trait ParsedFile {
 
   def findData(in: MetadataKey): Box[MetadataValue] = metaData.map.get(in)
 
+  def findString(in: MetadataKey): Box[String] = findData(in).flatMap(_.asString)
+
+  def findBoolean(in: MetadataKey): Box[Boolean] = findData(in).flatMap(_.asBoolean)
+  def findDate(in: MetadataKey): Box[DateTime] = findData(in).flatMap(_.asDate)
+
   def updateMetadata(newMd: MetadataValue): MyType
 
   def updateMetadata(key: MetadataKey, value: MetadataValue): MyType = {
     updateMetadata(metaData.removeKey(key).addKey(key, value))
   }
+
+  def pageUrl: String = fileInfo.pathAndSuffix.display
+
+  def neverWrite: Boolean = false
 
   def morphPath(f: List[String] => List[String]): MyType = {
     val np = f(pathAndSuffix.path)
@@ -394,6 +337,26 @@ final case class XmlFile(fileInfo: FileInfo,
 
   def updateMetadata(newMd: MetadataValue): XmlFile = copy(metaData =  newMd)
   def updateHtml(newHtml: NodeSeq): XmlFile = copy(html = newHtml)
+}
+
+final case class YamlFile(fileInfo: FileInfo,
+                         metaData: MetadataValue,
+                         uniqueId: String = Helpers.nextFuncName) extends ParsedFile {
+  type MyType = YamlFile
+
+  def updateFileInfo(newFileInfo: FileInfo): YamlFile = copy(fileInfo = newFileInfo)
+
+  /**
+   * Never write out
+   * @param out
+   */
+  def writeTo(out: OutputStream) {
+    sys.error("Trying to write a YAML file")
+  }
+
+  override def neverWrite: Boolean = true
+
+  def updateMetadata(newMd: MetadataValue): YamlFile = copy(metaData =  newMd)
 }
 
 final case class HtmlFile(fileInfo: FileInfo,

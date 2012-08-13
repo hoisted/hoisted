@@ -2,6 +2,7 @@ package org.hoisted.lib
 
 import net.liftweb.common.Box
 import org.joda.time.DateTime
+import net.liftweb.util.ThreadGlobal
 
 /**
  * Created with IntelliJ IDEA.
@@ -490,9 +491,11 @@ object MetadataKey extends LazyLoggableWithImplicitLogger {
     }
   }
 
+  object localSpecial extends ThreadGlobal[Map[String, MetadataKey]]
 
+  def special: Map[String, MetadataKey] = localSpecial.box openOr _special
 
-  lazy val special: Map[String, MetadataKey] ={
+  private lazy val _special: Map[String, MetadataKey] ={
     knownKeys.flatMap(kk => kk.key :: kk.alt).sorted.reduce((a, b) => {if (a == b) logger.error("Duplicate keys "+a); b})
     Map(knownKeys.flatMap(k => (k.key, k) :: k.alt.map(a => (a, k))): _*)
   }
