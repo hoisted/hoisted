@@ -27,6 +27,12 @@ object MarkdownParser {
   lazy val hasYaml = """(?s)(?m)^[yY][aA][mM][lL][ \t]*\{[ \t]*$(.*?)^\}[ \t]*[yY][Aa][mM][Ll][ \t]*$""".r
   lazy val htmlHasYaml = """(?s)(?m)\A(:?[ \t]*\n)*^[yY][aA][mM][lL][ \t]*\{[ \t]*$(.*?)^\}[ \t]*[yY][Aa][mM][Ll][ \t]*$""".r
 
+  def childrenOfBody(in: NodeSeq): NodeSeq = {
+    (in \ "body").toList match {
+      case Nil => in
+      case xs => xs.collect{case e: Elem => e}.flatMap(_.child)
+    }
+  }
 
   def readTopMetadata(in: String, markdownFormat: Boolean): (String, MetadataValue) = {
     val yamlRegex = if (markdownFormat) hasYaml else htmlHasYaml

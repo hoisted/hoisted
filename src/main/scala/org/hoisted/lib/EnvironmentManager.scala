@@ -229,10 +229,12 @@ class EnvironmentManager(val pluginPhase: PartialFunction[HoistedPhase, Unit] = 
         false).headOption.map(_.pathAndSuffix.path.mkString("/", "/", ""))) openOr "default"
   }
 
+  def notOnMenu_? : ParsedFile => Boolean = pf => pf.findBoolean(NotOnMenuKey) openOr false
 
   def computeMenuItems: List[ParsedFile] => List[MenuEntry] = pf =>
     pf.filter(shouldWriteFile).filter(isHtml).filter(a => !isBlogPost(a)).
       filter(a => !isArticle(a)).
+      filterNot(notOnMenu_?).
       filter(a => !isEvent(a)).map(pf => MenuEntry(pf, Nil)).
       sortWith(compareMenuEntries)
 

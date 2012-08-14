@@ -79,7 +79,7 @@ object ParsedFile extends LazyLoggableWithImplicitLogger {
           myParser = new AutoDetectParser()
           thing <- HoistedUtil.logFailure("Trying to read word, rtf, whatever "+realFile)(try {myParser.parse(inputStream, handler, metadata)} finally {tryo(inputStream.close)})
           str = new String(out.toByteArray, "UTF-8")
-          html <- parseHtml5File(str)
+          html <- parseHtml5File(str).map(MarkdownParser.childrenOfBody(_))
 
         } yield {
 

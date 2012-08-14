@@ -465,6 +465,13 @@ case object SetValueXFormKey extends MetadataKey {
   override def alt: List[String] = List("set_value_xform")
 }
 
+case object NotOnMenuKey extends MetadataKey {
+  def global = false
+  def key = "not-on-menu"
+
+  override def alt: List[String] = List("not_on_menu")
+}
+
 
 
 object MetadataKey extends LazyLoggableWithImplicitLogger {
