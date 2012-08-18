@@ -136,7 +136,6 @@ class EnvironmentManager(val pluginPhase: PartialFunction[HoistedPhase, Unit] = 
       ("withparam", "render") -> Full(WithParam.render _),
       ("embed", "render") -> Full(Embed.render _),
       ("archived_posts", "render") -> Full(BaseSnippets.archivedPosts),
-      ("if", "render") -> Full(BaseSnippets.testAttr _),
       ("blog", "posts") -> Full(BaseSnippets.blogPosts),
       ("blog", "simple") -> Full(BaseSnippets.simplyBlogPosts),
       ("embed", "group") -> Full(BaseSnippets.embedBy)
@@ -316,8 +315,8 @@ class EnvironmentManager(val pluginPhase: PartialFunction[HoistedPhase, Unit] = 
    */
   def hasBlogPosts: List[ParsedFile] => Boolean =
     pf =>
-      (metadata.findBoolean(HasBlogKey)) /*or findString(BlogRootKey, metadata).map(_ => true))*/ openOr
-        pf.toStream.flatMap(pf => pf.findData(PostKey).flatMap(_.asBoolean).filter(a => a)).headOption.isDefined
+      (metadata.findBoolean(HasBlogKey)) openOr
+        pf.toStream.filter(isBlogPost).headOption.isDefined
 
   private def _computeBlogRoot: () => String = () => metadata.findString(BlogRootKey) openOr "/blog"
 
@@ -724,24 +723,9 @@ class EnvironmentManager(val pluginPhase: PartialFunction[HoistedPhase, Unit] = 
   }
 
   def computeSlug: ParsedFile => String = pf =>
-    slugify(pf.findData(OutputPathKey).flatMap(_.asString) openOr computeOutputFileName(pf))
+    HoistedUtil.slugify(pf.findString(OutputPathKey) openOr computeOutputFileName(pf))
 
-  lazy val safe = """[^\w]""".r
 
-  lazy val noLeadingDash = """^(\-)+""".r
-  lazy val notrailingDash = """(\-)+$""".r
-  lazy val multipleDash = """(\-){2,}""".r
-
-  def slugify: String => String = in => {
-
-    val r1 = safe.replaceAllIn(in.trim.toLowerCase, "-")
-
-    val r2 = noLeadingDash.replaceAllIn(r1, "")
-    multipleDash.replaceAllIn(notrailingDash.replaceAllIn(r2, ""), "-") match {
-      case "" => "x"
-      case s => s
-    }
-  }
 
   def filterBasedOnMetadata: List[ParsedFile] => List[ParsedFile] = in => in.filter{f =>
     def test(key: MetadataKey, test: Box[Boolean] => Box[Boolean]): Box[Boolean] = {

@@ -18,7 +18,8 @@ object VeryTesty {
   def apply() = {
 
 
-    RunHoisted(new File("/Users/dpp/proj/plaything"), new File("/Users/dpp/tmp/outfrog")).map(_.logs)
+    RunHoisted(new File("/home/dpp/sky/repos/db_1_telegram-catfooddude_8cbd483a5ae91ff5043db68002f6d9e4edec9513"),
+      new File("/home/dpp/tmp/outfrog")).map(_.logs)
   }
 }
 

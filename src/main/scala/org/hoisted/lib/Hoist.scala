@@ -34,6 +34,25 @@ trait LazyLoggableWithImplicitLogger extends LazyLoggable {
 }
 
 object HoistedUtil {
+
+
+  lazy val safe = """[^\w]""".r
+
+  lazy val noLeadingDash = """^(\-)+""".r
+  lazy val notrailingDash = """(\-)+$""".r
+  lazy val multipleDash = """(\-){2,}""".r
+
+  def slugify: String => String = in => {
+
+    val r1 = safe.replaceAllIn(in.trim.toLowerCase, "-")
+
+    val r2 = noLeadingDash.replaceAllIn(r1, "")
+    multipleDash.replaceAllIn(notrailingDash.replaceAllIn(r2, ""), "-") match {
+      case "" => "x"
+      case s => s
+    }
+  }
+
   /*
  * Recursively delete files, directories, etc.
   */
