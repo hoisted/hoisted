@@ -555,7 +555,7 @@ class EnvironmentManager(val pluginPhase: PartialFunction[HoistedPhase, Unit] = 
     striptHtmlSuffix(computeOutputFileName(pf)) match {
     case s if s.endsWith("/index") => s.dropRight(5)
     case s => s
-  }).replace(" ", "+"))
+  }).replace(" ", "%20"))
 
   def isHtml: ParsedFile => Boolean = pf => {
     pf match {
