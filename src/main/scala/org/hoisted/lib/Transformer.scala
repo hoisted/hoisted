@@ -32,6 +32,7 @@ object TransformTest extends LazyLoggableWithImplicitLogger {
         case (OrTestKey, md) => List(OrTransformTest(listFromMetadata(md) :_*))
         case (HasTagTestKey, md) => md.asString.toList.map(HasTagTest(_))
         case (PathPrefixTestKey, md) => md.asString.toList.map(TestPathStartsWith(_))
+        case (FileSuffixTestKey, md) => md.asString.toList.map(TestFileSuffix(_))
         case (HasMetadataTestKey, md) => md.asString.toList.map(s => TestHasMetadata(MetadataKey(s)))
         case (EqStrTestKey, ListMetadataValue(k :: v :: _)) =>
           for {
@@ -154,6 +155,16 @@ case class TestPathStartsWith(str: String) extends TransformTest
 
   override def toString = "Path Starts with "+str
 }
+
+case class TestFileSuffix(str: String) extends TransformTest
+{
+  def test(pf: ParsedFile): Boolean = {
+    val res = pf.fileInfo.pathAndSuffix.suffix.map(_.toLowerCase.trim) == Some(str.toLowerCase.trim)
+    res
+  }
+  override def toString = "File suffix "+str
+}
+
 
 object Transformer {
   def fromMetadata(md: MetadataValue): Transformer = {

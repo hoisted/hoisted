@@ -461,6 +461,11 @@ class EnvironmentManager(val pluginPhase: PartialFunction[HoistedPhase, Unit] = 
   def updateGlobalMetadata: MetadataValue => Unit = md => {
     md match {
       case KeyedMetadataValue(keys) => keys.foreach{
+        case (GlobalXFormKey, v) =>
+          setMetadata(GlobalXFormKey, v)
+          val xforms = Transformer.listFromMetadata(v)
+          mdXFormRules = mdXFormRules ::: xforms
+
         case (k, v) if k.global =>
           setMetadata(k, v)
         case _ =>
@@ -546,11 +551,11 @@ class EnvironmentManager(val pluginPhase: PartialFunction[HoistedPhase, Unit] = 
   }
 
   def computeLink: ParsedFile => String = pf =>
-    linkMemo(pf, pf.findData(RedirectKey).flatMap(_.asString) openOr
+    linkMemo(pf, (pf.findData(RedirectKey).flatMap(_.asString) openOr
     striptHtmlSuffix(computeOutputFileName(pf)) match {
     case s if s.endsWith("/index") => s.dropRight(5)
     case s => s
-  })
+  }).replace(" ", "+"))
 
   def isHtml: ParsedFile => Boolean = pf => {
     pf match {

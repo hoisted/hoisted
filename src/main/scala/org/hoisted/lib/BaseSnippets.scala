@@ -291,6 +291,8 @@ object BaseSnippets extends LazyLoggableWithImplicitLogger {
       p =>
         val (short, more) = env.computeShortContent(p)
 
+        "data-post=img [src]" #> env.computeLink(p) &
+        "data-post=img [alt]" #> env.computeLinkText(p) &
         "data-post=link [href]" #> env.computeLink(p) &
           "data-post=link *" #> env.computeLinkText(p) &
           "data-post=link [data-hoisted-type]" #> by &

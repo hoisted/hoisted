@@ -397,6 +397,14 @@ case object PathPrefixTestKey extends MetadataKey {
 }
 
 
+case object FileSuffixTestKey extends MetadataKey {
+  def global = false
+  def key = "file_suffix_test"
+
+  override def alt: List[String] = List("file-suffix-test")
+}
+
+
 case object UrlKey extends MetadataKey {
   def global = false
   def key = "url"
@@ -472,6 +480,12 @@ case object NotOnMenuKey extends MetadataKey {
   override def alt: List[String] = List("not_on_menu")
 }
 
+case object GlobalXFormKey extends MetadataKey {
+  def global = true
+  def key = "global-xform"
+  override def alt: List[String] = List("global_xform")
+}
+
 
 
 object MetadataKey extends LazyLoggableWithImplicitLogger {
@@ -487,6 +501,7 @@ object MetadataKey extends LazyLoggableWithImplicitLogger {
   ExternalLinkKey, UrlKey, NotTestKey, AndTestKey, OrTestKey, HasTagTestKey,
   PostDirectoriesKey, EventDirectoriesKey, ArticleDirectoriesKey,
   RemovedKey, UpdatePathRootXFormKey, RemovePathPrefixXFormKey,
+  FileSuffixTestKey, GlobalXFormKey,
     PrependPathXFormKey, DateFromPathXFormKey, SetValueXFormKey,
   ShowIfKey, HideIfKey, DateFormatKey, MenuDividerKey, EventRootKey, ArticleRootKey)
 
