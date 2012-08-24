@@ -284,12 +284,13 @@ case class PrependPathTransform(prefix: List[String]) extends Transformer {
 }
 
 case object DateFromPathTransform extends Transformer {
-  private lazy val rx = """^([0-9]{2,4}-[0-9]{1,2}-[0-9]{1,2})-+(.*)""".r
+  private lazy val rx = """^([0-9]{2,4}-[0-9]{1,2}-[0-9]{1,2})[-_]+(.*)""".r
 
   def transformsKey(toTest: MetadataKey): Boolean = toTest == DateKey
 
   def transform(in: ParsedFile): ParsedFile = {
-    if (in.findData(DateKey).isDefined) in else {
+    val r1 =
+      if (in.findData(DateKey).isDefined) in else {
       in.findData(ValidFromKey).flatMap(_.asDate) match {
         case Full(d) => in.updateMetadata(DateKey, d)
         case _ =>
@@ -314,6 +315,29 @@ case object DateFromPathTransform extends Transformer {
           }
       }
     }
+
+    val dated = r1.fileInfo.pathAndSuffix.path.
+      zipWithIndex.map(str => (str._2, str._1, DateUtils.uglyParseDate(str._1)))
+
+    val r2 =
+    dated.filter(_._3.isDefined).reverse match {
+      case (pos, cur, Full(date)) :: _ =>
+        val nfi = r1.fileInfo.pathAndSuffix.copy(path =
+          dated.map{
+            case (p2, name, Full(_)) if p2 == pos =>
+              rx.findFirstMatchIn(name).map(_.group(2).trim match {
+                case "" => "date"
+                case x => x
+              }) getOrElse name
+            case x => x._2
+          })
+        r1.updateFileInfo(nfi.toFileInfo(r1.fileInfo.file))
+      case _ =>
+        r1
+    }
+
+    r2
+
   }
 }
 

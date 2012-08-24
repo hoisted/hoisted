@@ -34,7 +34,21 @@ trait LazyLoggableWithImplicitLogger extends LazyLoggable {
 }
 
 object HoistedUtil {
+  private var localeMap: Map[String, Box[Locale]] = Map.empty
+  private val localeSync = new Object
 
+  def toLocale(in: String): Box[Locale] = {
+    localeSync.synchronized{
+      val is = in.trim.toLowerCase
+      localeMap.get(is) match {
+        case Some(ret) => ret
+        case _ =>
+          val ret: Box[Locale] = Locale.getAvailableLocales.filter(_.toString.toLowerCase == is).headOption
+          localeMap += is -> ret
+          ret
+      }
+    }
+  }
 
   lazy val safe = """[^\w]""".r
 
@@ -127,7 +141,9 @@ object DateUtils {
 
   object CurrentLocale extends ThreadGlobal[Locale]
 
-  lazy val dateFormats = List(DateTimeFormat.forPattern("EEE, dd MMM yyyy HH:mm:ss Z"),
+  lazy val dateFormats: Stream[DateTimeFormatter] = List(
+    w3cDateTimeFormat,
+    DateTimeFormat.forPattern("EEE, dd MMM yyyy HH:mm:ss Z"),
     DateTimeFormat.forPattern("yyyy-MM-dd HH:mm:ss Z"),
     DateTimeFormat.forPattern("yyyy/MM/dd HH:mm:ss Z"),
     DateTimeFormat.forPattern("yyyy-MM-dd HH:mm:ss"),

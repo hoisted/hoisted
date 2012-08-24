@@ -122,6 +122,11 @@ case object TypeKey extends MetadataKey {
   def global = false
 
   def key = "type"
+
+  def test(pf: ParsedFile, toTest: String): Boolean =
+  pf.findData(this).map(_.forceListString.map(_.trim.toLowerCase).contains(toTest.trim.toLowerCase)) openOr false
+
+
 }
 
 case object TemplateURLKey extends MetadataKey {
@@ -211,7 +216,22 @@ case object SiteAuthorKey  extends MetadataKey {
 
   def key = "site_author"
   override def alt: List[String] = List("site-author")
+}
 
+case object GlobalLocaleKey extends MetadataKey {
+  def global = true
+
+  def key = "global_locale"
+
+  override def alt: List[String] = List("global-locale")
+}
+
+case object GlobalTimeZoneKey extends MetadataKey {
+  def global = true
+
+  def key = "global_timezone"
+
+  override def alt: List[String] = List("global-timezone")
 }
 
 case object AuthorKey  extends MetadataKey {
@@ -501,7 +521,7 @@ object MetadataKey extends LazyLoggableWithImplicitLogger {
   ExternalLinkKey, UrlKey, NotTestKey, AndTestKey, OrTestKey, HasTagTestKey,
   PostDirectoriesKey, EventDirectoriesKey, ArticleDirectoriesKey,
   RemovedKey, UpdatePathRootXFormKey, RemovePathPrefixXFormKey,
-  FileSuffixTestKey, GlobalXFormKey,
+  FileSuffixTestKey, GlobalXFormKey, GlobalLocaleKey, GlobalTimeZoneKey,
     PrependPathXFormKey, DateFromPathXFormKey, SetValueXFormKey,
   ShowIfKey, HideIfKey, DateFormatKey, MenuDividerKey, EventRootKey, ArticleRootKey)
 

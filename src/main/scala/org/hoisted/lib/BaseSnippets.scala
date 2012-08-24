@@ -39,8 +39,8 @@ object BaseSnippets extends LazyLoggableWithImplicitLogger {
 
     val months: Array[String] = {
       val locale = DateUtils.CurrentLocale.box openOr java.util.Locale.getDefault
-      val fmt = DateTimeFormat.forPattern("MMMM")
-      val baseDate = new org.joda.time.DateTime()
+      val fmt = DateTimeFormat.forPattern("MMMM").withLocale(locale)
+      val baseDate = (new org.joda.time.DateTime())
 
       (1 to 12).map(i => fmt.print(baseDate.withMonthOfYear(i))).toArray
     }
@@ -253,7 +253,7 @@ object BaseSnippets extends LazyLoggableWithImplicitLogger {
       case "post" => env.isBlogPost
       case "event" => env.isEvent
       case "article" => env.isArticle
-      case x => p => p.findData(TypeKey).flatMap(_.asString).map(_.toLowerCase) == Full(x)
+      case x => p => TypeKey.test(p, x)
     }
 
     val pages = env.pages.filter(filterFunc)

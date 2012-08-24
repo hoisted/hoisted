@@ -7,11 +7,12 @@ import common.Full
 import http.{SessionMemoize, RequestVar, Templates}
 import util._
 import Helpers._
-import org.joda.time.DateTime
+import org.joda.time.{DateTimeZone, DateTime}
 import org.eclipse.jgit.api.Git
 import java.io.{PrintWriter,  File}
 import xml.{Text, Elem, Node, NodeSeq}
 import org.joda.time.format.{DateTimeFormat, DateTimeFormatter}
+import java.util.Locale
 
 /**
  * Created with IntelliJ IDEA.
@@ -287,13 +288,14 @@ class EnvironmentManager(val pluginPhase: PartialFunction[HoistedPhase, Unit] = 
     })
 
   def isBlogPost: ParsedFile => Boolean = f => isHtml(f) && (f.findData(PostKey).flatMap(_.asBoolean) openOr
-  (f.findData(TypeKey).flatMap(_.asString).map(_.toLowerCase) == Full("post")))
+    TypeKey.test(f, "post"))
 
   def isEvent: ParsedFile => Boolean = f =>  isHtml(f) && (f.findData(EventKey).flatMap(_.asBoolean) openOr
-    (f.findData(TypeKey).flatMap(_.asString).map(_.toLowerCase) == Full("event")))
+    TypeKey.test(f, "event"))
 
   def isArticle: ParsedFile => Boolean = f =>  isHtml(f) && (f.findData(ArticleKey).flatMap(_.asBoolean) openOr
-    (f.findData(TypeKey).flatMap(_.asString).map(_.toLowerCase) == Full("article")))
+    TypeKey.test(f, "article"))
+
 
   def computeDate: ParsedFile => DateTime = pf => pf.findData(DateKey).flatMap(_.asDate) or
     (pf.fileInfo.file.map(ff => new DateTime(ff.lastModified()))) openOr new DateTime()
@@ -461,10 +463,26 @@ class EnvironmentManager(val pluginPhase: PartialFunction[HoistedPhase, Unit] = 
   def updateGlobalMetadata: MetadataValue => Unit = md => {
     md match {
       case KeyedMetadataValue(keys) => keys.foreach{
-        case (GlobalXFormKey, v) =>
+        case (k@GlobalLocaleKey, locale) =>
+          setMetadata(k, locale)
+          for {
+            loc <- locale.asString
+            locObj <- HoistedUtil.toLocale(loc)
+          } DateUtils.CurrentLocale.set(locObj)
+
+
+        case (k@GlobalTimeZoneKey, tz) =>
+          setMetadata(k, tz)
+          for {
+            tzStr <- tz.asString.map(_.trim)
+            theTz <- HoistedUtil.logFailure("Trying to set timezone to "+tzStr)(DateTimeZone.forID(tzStr))
+          } DateUtils.CurrentTimeZone.set(theTz)
+
+        case (k@GlobalXFormKey, v) =>
           setMetadata(GlobalXFormKey, v)
           val xforms = Transformer.listFromMetadata(v)
           mdXFormRules = mdXFormRules ::: xforms
+          setMetadata(k, v)
 
         case (k, v) if k.global =>
           setMetadata(k, v)
