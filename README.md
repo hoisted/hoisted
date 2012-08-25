@@ -3,14 +3,15 @@
 ### Getting started.
 
 1. git clone https://github.com/hoisted/hoisted.git
-2. cd hoisted
-3. ./sbt11
-4. Edit the file  **./src/main/resources/props/default.props** and add **cms.root=/path/to/your/site/files**
-5. Your site files should end with cms.xml (and are written in xhtml)
-
-    \> container:start
-    
-6. Go to http://127.0.0.1
+2. git clone https://github.com/lift/cms_site.git
+3. cd hoisted
+4. ./sbt11 assembly
+5. cd ..
+6. mkdir resulting_site
+7. java -jar ./hoisted/target/hoisted.jar cms_site/site/ resulting_site/
+8. All the files from cms_site/* will be transformed by hoisted, and the resulting html files
+   will end up in resulting_site/
+9. You can then copy those files to your apache or jetty web app folder.
 
 
 You can browse the [liftweb.net site repository](https://github.com/lift/cms_site/tree/master/site) on github to learn more about the supported syntax.
