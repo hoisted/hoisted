@@ -617,7 +617,8 @@ class EnvironmentManager(val pluginPhase: PartialFunction[HoistedPhase, Unit] = 
     }.collect{case hh: HasHtml => hh}.take(10) match {
       case Nil => Nil
       case bp =>
-        postMergeTransforms = ("head *+" #> <link rel="alternate" type="application/rss+xml" href="/rss.xml"/>) :: postMergeTransforms
+        val rssUrl = findMetadata(RSSUrlKey).flatMap(_.asString) openOr  "/rss.xml"
+        postMergeTransforms = ("head *+" #> <link rel="alternate" type="application/rss+xml" href={rssUrl}/>) :: postMergeTransforms
 
         val toShow = bp
 

@@ -253,6 +253,14 @@ case object AliasKey extends MetadataKey {
 case object NoSyntheticRssFile extends MetadataKey {
   def global = true
   def key = "no_synthetic_rss_file"
+
+  override def alt: List[String] = List("no-synthetic-rss-file")
+}
+
+case object RSSUrlKey extends MetadataKey {
+  def global = true
+  def key = "rss-url"
+  override def alt = List("rss_url")
 }
 
 case object HTagsKey extends MetadataKey {
@@ -514,6 +522,7 @@ object MetadataKey extends LazyLoggableWithImplicitLogger {
     BlogRootKey, TypeKey, SiteAuthorKey, AuthorKey,
     DateKey, SiteLinkKey, HTagsKey, HTagIdKey, HTagLevelKey,
     CategoryKey, NoSyntheticRssFile,
+  RSSUrlKey,
     HasBlogKey, TagsKey, AliasKey, HTagBodyKey,
     ValidFromKey, ValidToKey, EventKey, PostKey, LayoutKey, RedirectKey,
   MenuLocGroupKey, MenuIconKey, MenuIconPlacementKey, ArticleKey,
