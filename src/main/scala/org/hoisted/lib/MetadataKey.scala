@@ -124,7 +124,7 @@ case object TypeKey extends MetadataKey {
   def key = "type"
 
   def test(pf: ParsedFile, toTest: String): Boolean =
-  pf.findData(this).map(_.forceListString.map(_.trim.toLowerCase).contains(toTest.trim.toLowerCase)) openOr false
+    pf.findData(this).map(_.forceListString.map(_.trim.toLowerCase).contains(toTest.trim.toLowerCase)) openOr false
 
 
 }
@@ -211,10 +211,11 @@ case object TagsKey extends MetadataKey {
   override def alt: List[String] = List("tags")
 }
 
-case object SiteAuthorKey  extends MetadataKey {
+case object SiteAuthorKey extends MetadataKey {
   def global = true
 
   def key = "site_author"
+
   override def alt: List[String] = List("site-author")
 }
 
@@ -234,7 +235,7 @@ case object GlobalTimeZoneKey extends MetadataKey {
   override def alt: List[String] = List("global-timezone")
 }
 
-case object AuthorKey  extends MetadataKey {
+case object AuthorKey extends MetadataKey {
   def global = false
 
   def key = "author"
@@ -242,100 +243,135 @@ case object AuthorKey  extends MetadataKey {
 
 case object RedirectKey extends MetadataKey {
   def global = false
+
   def key = "redirect"
 }
 
 case object AliasKey extends MetadataKey {
   def global = false
+
   def key = "alias"
 }
 
 case object NoSyntheticRssFile extends MetadataKey {
   def global = true
+
   def key = "no_synthetic_rss_file"
 
   override def alt: List[String] = List("no-synthetic-rss-file")
 }
 
+case object FullRssContent extends MetadataKey {
+  def global = true
+
+  def key = "full_rss_content"
+
+  override def alt: List[String] = List("full_rss_content")
+}
+
 case object RSSUrlKey extends MetadataKey {
   def global = true
+
   def key = "rss-url"
+
   override def alt = List("rss_url")
 }
 
 case object HTagsKey extends MetadataKey {
   def global = false
+
   def key = "h-tags"
+
   override def alt: List[String] = List("h_tags")
 
 }
 
 case object HTagLevelKey extends MetadataKey {
   def global = false
+
   def key = "h-tag-level"
+
   override def alt: List[String] = List("h_tag_level")
 
 }
 
 case object HTagIdKey extends MetadataKey {
   def global = false
+
   def key = "h-tag-id"
+
   override def alt: List[String] = List("h_tag_id")
 
 }
 
 case object HTagBodyKey extends MetadataKey {
   def global = false
+
   def key = "h-tag-body"
+
   override def alt: List[String] = List("h_tag_body")
 
 }
 
 case object MenuLocGroupKey extends MetadataKey {
   def global = false
+
   def key = "menu-locgroup"
+
   override def alt: List[String] = List("menu_locgroup")
 
 }
 
 case object MenuIconKey extends MetadataKey {
   def global = false
+
   def key = "menu-icon"
+
   override def alt: List[String] = List("menu_icom")
 
 }
 
 case object MenuIconPlacementKey extends MetadataKey {
   def global = false
+
   def key = "menu-icon-placement"
+
   override def alt: List[String] = List("menu_icon_placement")
 
 }
 
 case object ShowIfKey extends MetadataKey {
   def global = false
+
   def key = "show-if"
+
   override def alt: List[String] = List("show_if")
 
 }
 
 case object HideIfKey extends MetadataKey {
   def global = false
+
   def key = "hide-if"
+
   override def alt: List[String] = List("hide_if")
 
 }
 
 case object DateFormatKey extends MetadataKey {
   def global = true
+
   def key = "date-format"
+
   override def alt: List[String] = List("date_format")
 
 }
 
 case object MenuDividerKey extends MetadataKey {
   def global = false
+
   def key = "menu-divider"
+
   override def alt: List[String] = List("menu_divider")
 
 }
@@ -360,6 +396,7 @@ case object ArticleRootKey extends MetadataKey {
 
 case object ExternalLinkKey extends MetadataKey {
   def global = true
+
   def key = "external_link"
 
   override def alt: List[String] = List("external-link")
@@ -367,6 +404,7 @@ case object ExternalLinkKey extends MetadataKey {
 
 case object NotTestKey extends MetadataKey {
   def global = false
+
   def key = "not_test"
 
   override def alt: List[String] = List("not-test")
@@ -374,6 +412,7 @@ case object NotTestKey extends MetadataKey {
 
 case object OrTestKey extends MetadataKey {
   def global = false
+
   def key = "or_test"
 
   override def alt: List[String] = List("or-test")
@@ -381,6 +420,7 @@ case object OrTestKey extends MetadataKey {
 
 case object AndTestKey extends MetadataKey {
   def global = false
+
   def key = "and_test"
 
   override def alt: List[String] = List("and-test")
@@ -388,6 +428,7 @@ case object AndTestKey extends MetadataKey {
 
 case object HasTagTestKey extends MetadataKey {
   def global = false
+
   def key = "has_tag_test"
 
   override def alt: List[String] = List("has-tag-test")
@@ -396,6 +437,7 @@ case object HasTagTestKey extends MetadataKey {
 
 case object HasMetadataTestKey extends MetadataKey {
   def global = false
+
   def key = "has_metadata_test"
 
   override def alt: List[String] = List("has-metadata-test")
@@ -404,6 +446,7 @@ case object HasMetadataTestKey extends MetadataKey {
 
 case object EqStrTestKey extends MetadataKey {
   def global = false
+
   def key = "eq_test"
 
   override def alt: List[String] = List("eq-test")
@@ -412,6 +455,7 @@ case object EqStrTestKey extends MetadataKey {
 
 case object ContainsStrTestKey extends MetadataKey {
   def global = false
+
   def key = "contains_test"
 
   override def alt: List[String] = List("contains-test")
@@ -419,6 +463,7 @@ case object ContainsStrTestKey extends MetadataKey {
 
 case object PathPrefixTestKey extends MetadataKey {
   def global = false
+
   def key = "path_prefix_test"
 
   override def alt: List[String] = List("path-prefix-test")
@@ -427,6 +472,7 @@ case object PathPrefixTestKey extends MetadataKey {
 
 case object FileSuffixTestKey extends MetadataKey {
   def global = false
+
   def key = "file_suffix_test"
 
   override def alt: List[String] = List("file-suffix-test")
@@ -435,11 +481,13 @@ case object FileSuffixTestKey extends MetadataKey {
 
 case object UrlKey extends MetadataKey {
   def global = false
+
   def key = "url"
 }
 
 case object PostDirectoriesKey extends MetadataKey {
   def global = true
+
   def key = "post-directories"
 
   override def alt: List[String] = List("post_directories")
@@ -448,6 +496,7 @@ case object PostDirectoriesKey extends MetadataKey {
 
 case object ArticleDirectoriesKey extends MetadataKey {
   def global = true
+
   def key = "article-directories"
 
   override def alt: List[String] = List("article_directories")
@@ -456,6 +505,7 @@ case object ArticleDirectoriesKey extends MetadataKey {
 
 case object EventDirectoriesKey extends MetadataKey {
   def global = true
+
   def key = "event-directories"
 
   override def alt: List[String] = List("event_directories")
@@ -463,11 +513,13 @@ case object EventDirectoriesKey extends MetadataKey {
 
 case object RemovedKey extends MetadataKey {
   def global = false
+
   def key = "removed"
 }
 
 case object UpdatePathRootXFormKey extends MetadataKey {
   def global = false
+
   def key = "update-path-root-xform"
 
   override def alt: List[String] = List("update_path_root_xform")
@@ -475,6 +527,7 @@ case object UpdatePathRootXFormKey extends MetadataKey {
 
 case object RemovePathPrefixXFormKey extends MetadataKey {
   def global = false
+
   def key = "remove-path-prefix-xform"
 
   override def alt: List[String] = List("remove_path_prefix_xform")
@@ -482,6 +535,7 @@ case object RemovePathPrefixXFormKey extends MetadataKey {
 
 case object PrependPathXFormKey extends MetadataKey {
   def global = false
+
   def key = "prepend-path-xform"
 
   override def alt: List[String] = List("prepend_path_xform")
@@ -489,6 +543,7 @@ case object PrependPathXFormKey extends MetadataKey {
 
 case object DateFromPathXFormKey extends MetadataKey {
   def global = false
+
   def key = "date-from-path-xform"
 
   override def alt: List[String] = List("date_from_path_xform")
@@ -496,6 +551,7 @@ case object DateFromPathXFormKey extends MetadataKey {
 
 case object SetValueXFormKey extends MetadataKey {
   def global = false
+
   def key = "set-value-xform"
 
   override def alt: List[String] = List("set_value_xform")
@@ -503,6 +559,7 @@ case object SetValueXFormKey extends MetadataKey {
 
 case object NotOnMenuKey extends MetadataKey {
   def global = false
+
   def key = "not-on-menu"
 
   override def alt: List[String] = List("not_on_menu")
@@ -510,10 +567,11 @@ case object NotOnMenuKey extends MetadataKey {
 
 case object GlobalXFormKey extends MetadataKey {
   def global = true
+
   def key = "global-xform"
+
   override def alt: List[String] = List("global_xform")
 }
-
 
 
 object MetadataKey extends LazyLoggableWithImplicitLogger {
@@ -522,17 +580,17 @@ object MetadataKey extends LazyLoggableWithImplicitLogger {
     BlogRootKey, TypeKey, SiteAuthorKey, AuthorKey,
     DateKey, SiteLinkKey, HTagsKey, HTagIdKey, HTagLevelKey,
     CategoryKey, NoSyntheticRssFile,
-  RSSUrlKey,
+    RSSUrlKey, FullRssContent,
     HasBlogKey, TagsKey, AliasKey, HTagBodyKey,
     ValidFromKey, ValidToKey, EventKey, PostKey, LayoutKey, RedirectKey,
-  MenuLocGroupKey, MenuIconKey, MenuIconPlacementKey, ArticleKey,
-  PathPrefixTestKey, HasMetadataTestKey, ContainsStrTestKey, EqStrTestKey,
-  ExternalLinkKey, UrlKey, NotTestKey, AndTestKey, OrTestKey, HasTagTestKey,
-  PostDirectoriesKey, EventDirectoriesKey, ArticleDirectoriesKey,
-  RemovedKey, UpdatePathRootXFormKey, RemovePathPrefixXFormKey,
-  FileSuffixTestKey, GlobalXFormKey, GlobalLocaleKey, GlobalTimeZoneKey,
+    MenuLocGroupKey, MenuIconKey, MenuIconPlacementKey, ArticleKey,
+    PathPrefixTestKey, HasMetadataTestKey, ContainsStrTestKey, EqStrTestKey,
+    ExternalLinkKey, UrlKey, NotTestKey, AndTestKey, OrTestKey, HasTagTestKey,
+    PostDirectoriesKey, EventDirectoriesKey, ArticleDirectoriesKey,
+    RemovedKey, UpdatePathRootXFormKey, RemovePathPrefixXFormKey,
+    FileSuffixTestKey, GlobalXFormKey, GlobalLocaleKey, GlobalTimeZoneKey,
     PrependPathXFormKey, DateFromPathXFormKey, SetValueXFormKey,
-  ShowIfKey, HideIfKey, DateFormatKey, MenuDividerKey, EventRootKey, ArticleRootKey)
+    ShowIfKey, HideIfKey, DateFormatKey, MenuDividerKey, EventRootKey, ArticleRootKey)
 
   def apply(s: String): MetadataKey = {
     val (_s, top) = if (s.startsWith("!")) (s.substring(1), true) else (s, false)
@@ -546,8 +604,10 @@ object MetadataKey extends LazyLoggableWithImplicitLogger {
 
   def special: Map[String, MetadataKey] = localSpecial.box openOr _special
 
-  private lazy val _special: Map[String, MetadataKey] ={
-    knownKeys.flatMap(kk => kk.key :: kk.alt).sorted.reduce((a, b) => {if (a == b) logger.error("Duplicate keys "+a); b})
+  private lazy val _special: Map[String, MetadataKey] = {
+    knownKeys.flatMap(kk => kk.key :: kk.alt).sorted.reduce((a, b) => {
+      if (a == b) logger.error("Duplicate keys " + a); b
+    })
     Map(knownKeys.flatMap(k => (k.key, k) :: k.alt.map(a => (a, k))): _*)
   }
 }

@@ -626,6 +626,16 @@ class EnvironmentManager(val pluginPhase: PartialFunction[HoistedPhase, Unit] = 
           () => KeyedMetadataValue(List(DateKey -> DateTimeMetadataValue(new DateTime()))),
           out => {
             val pw = new PrintWriter(out)
+            val postInfo: HasHtml => NodeSeq =
+            if (findMetadata(FullRssContent).flatMap(_.asBoolean) openOr false) {
+              post => post.html
+            } else {
+             post => makeShortHtml(post.html.toList) match {
+                case (ns, false) => ns
+                case (ns, _) => ns.dropRight(1)
+              }
+            }
+
             pw.println("<?xml version=\"1.0\" encoding=\"UTF-8\"?>")
             val xml =
               <feed xmlns="http://www.w3.org/2005/Atom">
@@ -655,10 +665,8 @@ class EnvironmentManager(val pluginPhase: PartialFunction[HoistedPhase, Unit] = 
                   </author>
                   <updated>{w3cFormattedDate(post)}</updated>
                   <summary type="html">
-                    {makeShortHtml(post.html.toList) match {
-                    case (ns, false) => ns
-                    case (ns, _) => ns.dropRight(1)
-                  }
+                    {
+                    postInfo(post)
                     }
                   </summary>
                 </entry>)}
