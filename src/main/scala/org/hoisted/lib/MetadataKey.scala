@@ -266,7 +266,7 @@ case object FullRssContent extends MetadataKey {
 
   def key = "full_rss_content"
 
-  override def alt: List[String] = List("full_rss_content")
+  override def alt: List[String] = List("full-rss-content")
 }
 
 case object RSSUrlKey extends MetadataKey {
