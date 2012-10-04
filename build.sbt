@@ -30,7 +30,7 @@ version := "0.1-SNAPSHOT"
 // crossScalaVersions in ThisBuild    := Seq("2.9.2") // "2.9.1-1", "2.9.1", "2.9.0-1", "2.9.0")
 
 libraryDependencies ++= {
-  val liftVersion = "2.5-SNAPSHOT"
+  val liftVersion = "2.5-M1"
   Seq(
     "net.liftweb" %% "lift-webkit" % liftVersion % "compile"
     )
