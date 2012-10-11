@@ -106,6 +106,15 @@ object HoistedUtil {
     case x => x
   }
 
+  def prettyPrintExceptionInfo(exp: Throwable, first: Boolean = true): String = {
+    if (exp eq null) "" else {
+      (if (first) "" else "Enclosed ")+
+    "Exception: "+exp.toString+"\n" +
+    "Stack Trace: "+exp.getStackTrace.toList.take(20).map(i => "         "+i.toString).mkString("\n", "\n", "\n") +
+      prettyPrintExceptionInfo(exp.getCause, false)
+    }
+  }
+
   def boxToErrorString[T](eb: Box[T]): Box[String] = {
     eb match {
       case Full(_) => Empty
@@ -114,18 +123,14 @@ object HoistedUtil {
       case ParamFailure(msg, expb, nested, code) =>
         Full((expb match {
           case Full(exp) =>
-            "Error Message: "+msg+" error code "+code+"\n" +
-            "Exception: "+exp.toString+"\n" +
-            "Stack Trace: "+exp.getStackTrace.toList.take(20).map(i => "         "+i.toString).mkString("\n", "\n", "\n")
+            "Error Message: "+msg+" error code "+code+"\n" + prettyPrintExceptionInfo(exp)
           case _ => msg+" error code: "+code
         })+(nested.map(f => "\nNested Failure: \n"+boxToErrorString(f)) openOr ""))
 
       case Failure(msg, expb, nested) =>
         Full((expb match {
           case Full(exp) =>
-            "Error Message: "+msg+"\n" +
-            "Exception: "+exp.toString+"\n" +
-            "Stack Trace: "+exp.getStackTrace.toList.take(20).map(i => "         "+i.toString).mkString("\n", "\n", "\n")
+            "Error Message: "+msg+"\n" + prettyPrintExceptionInfo(exp)
           case _ => msg
         })+(nested.map(f => "\nNested Failure: \n"+boxToErrorString(f)) openOr ""))
 

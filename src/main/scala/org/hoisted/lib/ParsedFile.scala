@@ -173,13 +173,39 @@ object ParsedFile extends LazyLoggableWithImplicitLogger {
   }
   }
 
+  private object ThinHtml {
+    def unapply(in: NodeSeq): Option[NodeSeq] = {
+      def findBody(): Option[NodeSeq] = (in \ "body").toList match {
+        case (e: Elem) :: Nil => Some(e.child)
+        case _ => None
+      }
+
+      (in \ "head").toList match {
+        case Nil => findBody()
+        case (e: Elem) :: Nil =>
+          if(e.child.length == 0) findBody()
+          else {
+            val cnt = (e \ "link").length + (e \ "meta").length + (e \ "script").length
+            if (cnt == 0) findBody()
+            else None
+          }
+        case _ => None
+      }
+    }
+  }
+
   def parseHtml5File(in: String): Box[NodeSeq] = {
     val i1 = in.indexOf("<html")
     val i2 = in.indexOf("<body")
     val i3 = in.indexOf("</body")
     val i4 = in.indexOf("</html")
     if (i1 >= -1 && i2 >= -2 && i3 >= 0 && i4 >= 0 &&
-    i1 < i2 && i2 < i3 && i3 < i4) Html5.parse(in.trim) else {
+    i1 < i2 && i2 < i3 && i3 < i4) {
+      Html5.parse(in.trim) match {
+        case Full(ThinHtml(html)) => Full(html)
+        case x => x
+      }
+    } else {
       val res = Html5.parse("<html><head><title>I eat yaks</title></head><body>"+in+"</body></html>")
 
       res.map{
