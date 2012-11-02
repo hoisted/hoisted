@@ -40,7 +40,7 @@ object ParsedFile extends LazyLoggableWithImplicitLogger {
           metaData <- HoistedUtil.reportFailure("Parsing YAML file "+fi.pathAndSuffix.display)( YamlUtil.parse(yaml))
         } yield YamlFile(fi, metaData)
 
-      case Some("xml") | Some("cms.xml") =>
+      case Some("xhtml") | Some("cms.xml") =>
         for {
           realFile <- fi.file
           fis <- HoistedUtil.logFailure("Trying to open file "+realFile)(new FileInputStream(realFile))
@@ -60,7 +60,7 @@ object ParsedFile extends LazyLoggableWithImplicitLogger {
           _ <- HoistedUtil.logFailure("Closing "+realFile)(fis.close())
         } yield HtmlFile(fi, html, info)
 
-      case Some("md") =>
+      case Some("md") | Some("mkd") =>
         for {
           realFile <- fi.file
           whole <- HoistedUtil.logFailure("Reading "+realFile)(Helpers.readWholeFile(realFile))

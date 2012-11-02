@@ -17,7 +17,7 @@ object MetadataMeta {
   type Metadata = Map[MetadataKey, MetadataValue]
 }
 
-trait MetadataKey {
+abstract class MetadataKey {
   def global: Boolean
 
   def prepend: Boolean = false
