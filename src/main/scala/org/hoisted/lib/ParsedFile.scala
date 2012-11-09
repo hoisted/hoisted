@@ -12,6 +12,7 @@ import collection.mutable.ListBuffer
 import org.apache.tika.parser.AutoDetectParser
 import org.apache.tika.sax.ToHTMLContentHandler
 import org.apache.tika.metadata.Metadata
+import javax.swing.text.html.StyleSheet.BoxPainter
 
 /**
  * Created with IntelliJ IDEA.
@@ -253,6 +254,8 @@ object ParsedFile extends LazyLoggableWithImplicitLogger {
 sealed trait ParsedFile {
   type MyType <: ParsedFile
 
+  def matchPath(path: List[String]): Boolean = fileInfo.pathAndSuffix.display == path.mkString("/", "/", "")
+
   def updateFileInfo(newFileInfo: FileInfo): MyType
 
   def metaData: MetadataValue
@@ -288,6 +291,14 @@ sealed trait ParsedFile {
   def uniqueId: String
 
   def writeTo(out: OutputStream): Unit
+
+  lazy val bytes:Box[Array[Byte]] = {
+    Helpers.tryo{
+      val fos = new ByteArrayOutputStream()
+      writeTo(fos)
+      fos.toByteArray()
+    }
+  }
 }
 
 sealed trait HasHtml extends ParsedFile {

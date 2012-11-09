@@ -23,6 +23,19 @@ import java.net.URLEncoder
  */
 
 object BaseSnippets extends LazyLoggableWithImplicitLogger {
+
+  def sketchboard(in: NodeSeq): NodeSeq = {
+    val acct = S.attr("acct")
+    acct.map(a => {
+      val url = Helpers.urlEncode(a)
+      <a href={"http://sketchboard.me/" + url}
+         target="_blank"><img
+      src={"http://sketchboard.me/img/" + url}></img>
+      </a>
+    }) openOr in
+  }
+
+
   def embedBy: NodeSeq => NodeSeq = ns => {
     val (by, pages) = selectAGroup
 

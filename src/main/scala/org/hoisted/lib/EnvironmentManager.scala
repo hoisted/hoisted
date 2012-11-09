@@ -4,7 +4,8 @@ import net.liftweb._
 import builtin.snippet._
 import common._
 import common.Full
-import http.{SessionMemoize, RequestVar, Templates}
+
+import http.{Factory, SessionMemoize, RequestVar, Templates}
 import util._
 import Helpers._
 import org.joda.time.{DateTimeZone, DateTime}
@@ -28,12 +29,7 @@ trait HoistedPhase {
 
 final case class PostRenderPhase(location: File, environment: EnvironmentManager) extends HoistedPhase
 
-class EnvironmentManager(val pluginPhase: PartialFunction[HoistedPhase, Unit] = Map.empty,
-                         val additionalKeys: List[MetadataKey] = Nil,
-                         val runWrapper: CommonLoanWrapper = new CommonLoanWrapper {
-                           def apply[T](f: => T): T = f
-                         },
-                         val externRepoLoader: Box[(String, EnvironmentManager, File) => Box[Boolean]] = Empty) extends LazyLoggableWithImplicitLogger {
+class EnvironmentManager() extends LazyLoggableWithImplicitLogger with Factory {
   val startTime = Helpers.millis
   private var _metadata: MetadataValue = NullMetadataValue
   var menuEntries: List[MenuEntry] = Nil
@@ -44,25 +40,40 @@ class EnvironmentManager(val pluginPhase: PartialFunction[HoistedPhase, Unit] = 
 
   def blogPosts: List[ParsedFile] = computePosts(pages)
 
+
+  var pluginPhase: PartialFunction[HoistedPhase, Unit] = Map.empty
+  var additionalKeys: List[MetadataKey] = Nil
+  var runWrapper: CommonLoanWrapper = new CommonLoanWrapper {
+    def apply[T](f: => T): T = f
+  }
+  var externRepoLoader: Box[(String, EnvironmentManager, File) => Box[Boolean]] = Empty
+
   private var postRun: Vector[() => Unit] = Vector()
 
-  def menuTitle: NodeSeq => NodeSeq = ns => {
+  def menuTitle: NodeSeq => NodeSeq = menuTitleFactory.vend
+
+
+  def menuTitleFactory: FactoryMaker[NodeSeq => NodeSeq] = new FactoryMaker(Vendor.apply(() =>
+    (ns: NodeSeq) => {
     val value = CurrentFile.box.map(computeTitle) openOr "Telegram Site"
 
     if (ns.collect {
       case e: Elem => e
     }.isDefined) ("* *+" #> value).apply(ns)
     else Text(value)
-  }
+    })){}
 
-  def siteName: NodeSeq => NodeSeq = ns => {
+
+  def siteName: NodeSeq => NodeSeq = siteNameVendor.vend
+
+  def siteNameVendor: FactoryMaker[NodeSeq => NodeSeq] = new FactoryMaker(Vendor(() => (ns: NodeSeq) => {
     val value = (metadata.findString(SiteNameKey) openOr "Telegram")
     if (ns.collect {
       case e: Elem => e
     }.isDefined)
       ("* *" #> value).apply(ns)
     else Text(value)
-  }
+  })){}
 
   def menuItems: NodeSeq => NodeSeq = ns => {
     ("li" #> menuEntries.map{
@@ -113,6 +124,16 @@ class EnvironmentManager(val pluginPhase: PartialFunction[HoistedPhase, Unit] = 
 
   def snippets: PartialFunction[(String, String), Box[NodeSeq => NodeSeq]] = snippetCalculator.get
 
+  def addSnippet(snippet: PartialFunction[(String, String), Box[NodeSeq => NodeSeq]]): Unit = {
+    externalSnippets ::= snippet
+    snippetCalculator.remove()
+  }
+
+  def addEarlySnippet(snippet: PartialFunction[(String, String), Box[NodeSeq => NodeSeq]]): Unit = {
+    externalEarlySnippets ::= snippet
+    earlySnippetCalculator.remove()
+  }
+
   var externalSnippets: List[PartialFunction[(String, String), Box[NodeSeq => NodeSeq]]] = Nil
 
   var externalEarlySnippets: List[PartialFunction[(String, String), Box[NodeSeq => NodeSeq]]] = Nil
@@ -157,6 +178,7 @@ class EnvironmentManager(val pluginPhase: PartialFunction[HoistedPhase, Unit] = 
       ("ignore", "render") -> Full(Ignore.render _),
       ("tail", "render") -> Full(Tail.render _),
       ("head", "render") -> Full(Head.render _),
+    ("sketchboard", "me") -> Full(BaseSnippets.sketchboard _),
       ("a", "render") -> Full(BaseSnippets.doA),
       ("choose", "render") -> Full(BaseSnippets.doChoose _),
       ("subs", "render") -> Full(BaseSnippets.doSubs _),
@@ -231,12 +253,15 @@ class EnvironmentManager(val pluginPhase: PartialFunction[HoistedPhase, Unit] = 
 
   def notOnMenu_? : ParsedFile => Boolean = pf => pf.findBoolean(NotOnMenuKey) openOr false
 
-  def computeMenuItems: List[ParsedFile] => List[MenuEntry] = pf =>
+  def computeMenuItems: List[ParsedFile] => List[MenuEntry] = computeMenuItemsVendor.vend
+
+  def computeMenuItemsVendor = new FactoryMaker(Vendor(
+    () => (pf: List[ParsedFile]) =>
     pf.filter(shouldWriteFile).filter(isHtml).filter(a => !isBlogPost(a)).
       filter(a => !isArticle(a)).
       filterNot(notOnMenu_?).
       filter(a => !isEvent(a)).map(pf => MenuEntry(pf, Nil)).
-      sortWith(compareMenuEntries)
+      sortWith(compareMenuEntries))){}
 
   def compareMenuEntries: (MenuEntry, MenuEntry) => Boolean = {
     case (MenuEntry(m1, _), MenuEntry(m2, _)) =>

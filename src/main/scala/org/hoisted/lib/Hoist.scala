@@ -3,10 +3,11 @@ package org.hoisted.lib
 import java.io.File
 import net.liftweb.common._
 import net.liftweb.common.Full
-import net.liftweb.util.{ThreadGlobal, Helpers}
+import net.liftweb.util.{PCDataXmlParser, ThreadGlobal, Helpers}
 import org.joda.time.format.{DateTimeFormatter, ISODateTimeFormat, DateTimeFormat}
 import org.joda.time.{DateTime, DateTimeZone}
 import java.util.Locale
+import xml.{NodeSeq, Elem}
 
 /**
  * Created with IntelliJ IDEA.
@@ -16,12 +17,54 @@ import java.util.Locale
  * To change this template use File | Settings | File Templates.
  */
 
-object Hoist {
+object Hoist extends LazyLoggableWithImplicitLogger {
   def main(args: Array[String]) {
-    args.toList match {
-      case from :: to :: Nil => RunHoisted(new File(from), new File(to))
-      case _ => "Usage 'java -jar hoisted.jar source_directory destination_directory"
+
+    val em = new EnvironmentManager()
+
+    HoistedEnvironmentManager.doWith(em) {
+    val info = slurpParams(args.toList)
+
+    info.classInfo match {
+      case Full((cl, clz)) =>
+        val toRun = clz.filter(s => s == "Boot" || s.endsWith(".Boot"))
+        for {
+          clzName <- toRun
+          theClz <- Helpers.tryo(Nil)(cl.loadClass(clzName).asInstanceOf[Class[AnyRef]])
+          inst1 <- Helpers.tryo(Nil)(theClz.newInstance)
+          inst <- Full(inst1).asA[Function0[AnyRef]]
+        } logger.info("Booting "+clzName+" res "+inst.apply())
+
+      case x =>
     }
+
+    info match {
+      case Info(_, _, f: Failure) =>
+        logger.error("Failed to compile code "+f.msg); sys.exit(127)
+      case Info(Full(from), Full(to), _) => RunHoisted(new File(from), new File(to), HoistedEnvironmentManager.value)
+      case _ => logger.error("Usage 'java -jar hoisted.jar source_directory destination_directory"); sys.exit(127)
+    }
+    }
+  }
+
+  case class Info(source: Box[String], dest: Box[String], classInfo: Box[(ClassLoader, Set[String])] = Empty)
+  def slurpParams(p: List[String]): Info = {
+
+    val (p2, cl) = {
+      val (sc, notSc) = p.partition(_.toLowerCase().endsWith(".scala"))
+      val read = sc.flatMap(name => Helpers.tryo{(name -> new String(Helpers.readWholeFile(new File(name)), "UTF-8"))})
+
+      val ct = new CompileTool()
+
+      (notSc, Full(1).filter(i => !read.isEmpty).flatMap(i => {val res = ct.classloaderFor(read);
+        res}))
+    }
+
+
+    p2 match {
+    case from :: to :: Nil => Info(Full(from), Full(to), cl)
+    case _ => Info(Empty, Empty, cl)
+  }
   }
 }
 
@@ -36,6 +79,28 @@ trait LazyLoggableWithImplicitLogger extends LazyLoggable {
 object HoistedUtil {
   private var localeMap: Map[String, Box[Locale]] = Map.empty
   private val localeSync = new Object
+
+  def fileForName(path: List[String], files: List[ParsedFile]): Box[ParsedFile] =
+  files.toStream.find(_.matchPath(path)).headOption
+
+  def bytesForFile(path: List[String], files: List[ParsedFile]): Box[Array[Byte]] =
+  for {
+    file <- fileForName(path, files)
+    bytes <- file.bytes
+  } yield bytes
+
+  def stringForFile(path: List[String], files: List[ParsedFile]): Box[String] =
+  for {
+    bytes <- bytesForFile(path, files)
+    str <- Helpers.tryo(new String(bytes, "UTF-8"))
+  } yield str
+
+  def xmlForFile(path: List[String], files: List[ParsedFile]): Box[NodeSeq] =
+    for {
+      str <- stringForFile(path, files)
+      xml <- PCDataXmlParser.apply(str)
+    } yield xml
+
 
   def toLocale(in: String): Box[Locale] = {
     localeSync.synchronized{

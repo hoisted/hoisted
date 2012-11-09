@@ -7,6 +7,9 @@ import tools.nsc.reporters.Reporter
 import collection.mutable.ListBuffer
 import java.util.concurrent.ConcurrentHashMap
 import tools.nsc.util.{BatchSourceFile, Position}
+import tools.nsc.io.VirtualFile
+import util.Helpers
+import java.net.URLClassLoader
 
 
 /**
@@ -19,7 +22,7 @@ import tools.nsc.util.{BatchSourceFile, Position}
  */
 
 
-class CompileTool {
+class CompileTool extends LazyLoggableWithImplicitLogger {
 
   import java.io.File
   import scala.tools.nsc.Global
@@ -34,15 +37,18 @@ class CompileTool {
 
     settings.outputDirs.setSingleOutput(vd)
 
-    val wheresScala = Class.forName("scala.ScalaObject").getProtectionDomain.getCodeSource
-    val wheresCompiler = Class.forName("scala.tools.nsc.Interpreter").getProtectionDomain.
-      getCodeSource.getLocation.getFile
-    val wheresLibs = wheresScala.getLocation.getFile
+    val classes = List("scala.ScalaObject", "scala.tools.nsc.Interpreter",
+      "org.hoisted.lib.CompileTool", "net.liftweb.common.Box",
+      "net.liftweb.util.Helpers", "net.liftweb.http.S", "net.liftweb.actor.LiftActor")
 
-    val path = List(wheresCompiler, wheresLibs)
+    val path = (classes.map(cn => Class.forName(cn).getProtectionDomain.getCodeSource.getLocation.getFile) :::
+      (this.getClass.getClassLoader match {
+        case cl: URLClassLoader => cl.getURLs.toList.map(_.getFile)
+        case _ => Nil
+      })).distinct
+
     val settingsClasspath = settings.bootclasspath.value
     settings.bootclasspath.value = (settingsClasspath :: path).mkString(File.pathSeparator)
-
 
     val compiler = new Global(settings, reporter)
 
@@ -60,12 +66,12 @@ class CompileTool {
     if (in.isDirectory) in.iterator.toList.flatMap(fileToBytes(_))
     else List(fixPath(in.path) -> in.toByteArray)
 
-  def classloaderFor(src: Seq[(String, String)], oldClasses: Map[String, Array[Byte]] = Map.empty): Box[ClassLoader] = {
+  def classloaderFor(src: Seq[(String, String)], oldClasses: Map[String, Array[Byte]] = Map.empty): Box[(ClassLoader, Set[String])] = {
     for {
       newMap <- compile(src)
       map = newMap.toList.foldLeft(oldClasses){case (mip, nb) => mip + nb }
       masterCL = this.getClass.getClassLoader
-    } yield new ClassLoader(masterCL) {
+    } yield (new ClassLoader(masterCL) {
       private val classes: ConcurrentHashMap[String, Class[_]] = new ConcurrentHashMap()
 
       override def loadClass(className: String): Class[_] = {
@@ -96,7 +102,7 @@ class CompileTool {
         }
 
       }
-    }
+    }, map.keySet)
   }
 
   def compile(src: Seq[(String, String)]): Box[Map[String, Array[Byte]]] = {
@@ -108,6 +114,7 @@ class CompileTool {
       protected def info0(pos: Position, msg: String, severity: this.type#Severity, force: Boolean) {
         severity match {
           case this.ERROR => errors.append(pos -> msg)
+            logger.error(pos+": "+msg)
           case _ =>
         }
       }
@@ -117,11 +124,15 @@ class CompileTool {
     val comp = compiler(virtualDirectory, reporter)
 
     val files = src.toList.map {
-      case (name, code) => new BatchSourceFile(name, code)
+      case (name, code) => new BatchSourceFile(new VirtualFile(name) {
+        override def container: AbstractFile = this
+      }, code.toArray)
     }
 
+    // this(new VirtualFile(sourceName), cs.toArray)
+
     val run = new comp.Run
-    run.compileSources(files)
+    val runRes = Helpers.tryo(run.compileSources(files))
 
     errors.toList match {
       case Nil => Full(Map(fileToBytes(virtualDirectory): _*))

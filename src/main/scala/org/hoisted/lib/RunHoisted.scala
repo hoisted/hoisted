@@ -8,7 +8,7 @@ import http._
 import http.LiftRules.{SnippetFailures, SnippetFailure}
 import util._
 import Helpers._
-import java.util.Locale
+import java.util.{Date, Locale}
 import java.io._
 import xml._
 
@@ -63,6 +63,59 @@ trait HoistedRenderer extends LazyLoggableWithImplicitLogger {
     }
   }
 
+  def bytes(in: ParsedFile): Array[Byte] = {
+    val os = new ByteArrayOutputStream()
+    in.writeTo(os)
+    os.toByteArray
+  }
+
+  /**
+   * Run any plugins in phase 1
+   * @param in the list of current parsed files
+   * @return the revised parsed files
+   */
+  def runPluginsPhase1(in: List[ParsedFile]): List[ParsedFile] = in.filter(pf => pf.fileInfo.pathAndSuffix.path match {
+    case "_scripts" :: rest if !rest.isEmpty && pf.fileInfo.suffix == Some("scala") => true
+    case x =>
+      false
+  }) match {
+    case Nil => in
+    case xs =>
+      val xfrom: List[PluginPhase1] = for {
+        (cl, names) <- (new CompileTool).classloaderFor(xs.map(pf => pf.fileInfo.pathAndSuffix.display -> new String(bytes(pf), "UTF-8"))).toList
+        namesToTest <- names.toList if (namesToTest.indexOf("$") < 0)
+        clz <- Helpers.tryo(Nil)(cl.loadClass(namesToTest).asInstanceOf[Class[AnyRef]]).toList if classOf[PluginPhase1].isAssignableFrom(clz)
+        inst <- Helpers.tryo(clz.newInstance()).toList
+      } yield inst.asInstanceOf[PluginPhase1]
+
+      xfrom.foldLeft(in)((cur: List[ParsedFile], func: PluginPhase1) => func.apply(cur))
+  }
+
+
+
+  /*
+  /**
+   * Run any plugins in phase 2
+   * @param in the list of current parsed files
+   * @return the revised parsed files
+   */
+  def runPluginsPhase2(in: List[ParsedFile]): List[ParsedFile] = in.filter(pf => pf.fileInfo.pathAndSuffix.path match {
+      case "_scripts" :: rest if !rest.isEmpty && pf.fileInfo.suffix == Some("scala") => true
+      case x =>
+        false
+    }) match {
+      case Nil => in
+      case xs =>
+        val xfrom: List[PluginPhase2] = for {
+          (cl, names) <- (new CompileTool).classloaderFor(xs.map(pf => pf.fileInfo.pathAndSuffix.display -> new String(bytes(pf), "UTF-8"))).toList
+          namesToTest <- names.toList if (namesToTest.indexOf("$") < 0)
+          clz <- Helpers.tryo(Nil)(cl.loadClass(namesToTest).asInstanceOf[Class[AnyRef]]).toList if classOf[PluginPhase2].isAssignableFrom(clz)
+          inst <- Helpers.tryo(clz.newInstance()).toList
+        } yield inst.asInstanceOf[PluginPhase2]
+
+        xfrom.foldLeft(in)((cur, func) => func(cur))
+    }*/
+
   /**
    * Collect the global metadata from the incoming files, then
    * update the metadata for each file.  Then pull any externally referenced files
@@ -74,7 +127,9 @@ trait HoistedRenderer extends LazyLoggableWithImplicitLogger {
   def doMetadataMagicAndSuch(_in: List[ParsedFile]): Box[List[ParsedFile]] = {
     _in.foreach(pf => env.updateGlobalMetadata(pf.metaData))
 
-    val in = _in.map(env.transformFile)
+    val in2 = _in.map(env.transformFile)
+
+    val in = runPluginsPhase1(in2)
 
     val withLoadedTemplates =
       env.findMetadata(ExternalLinkKey) match {
@@ -209,7 +264,26 @@ trait HoistedRenderer extends LazyLoggableWithImplicitLogger {
 
       done <- HoistedUtil.logFailure("Writing rendered files")(writeFiles(transformedFiles, inDir, outDir))
       _ = HoistedUtil.logFailure("Post run")(env.runPostRun(outDir))
-    } yield HoistedTransformMetaData(new String(log.toByteArray), transformedFiles, env.metadata, env, aliases)
+
+
+
+
+
+    }  yield {
+
+      val posts = env.allPages
+
+      val start = Helpers.millis
+
+      // schedule the next rendering
+      val when = posts.flatMap(p => {
+        val pair = env.computeFromToDates(p)
+        pair._1.toList ::: pair._2.toList
+      }).map(_.getMillis).filter(_ > start).sorted.headOption
+
+
+      HoistedTransformMetaData(new String(log.toByteArray), aliases, when /*, transformedFiles, env.metadata, env, aliases*/)
+    }
   }
 
   def apply(_inDir: File, outDir: File, environment: EnvironmentManager = new EnvironmentManager): Box[HoistedTransformMetaData] = {
@@ -465,9 +539,13 @@ trait HoistedRenderer extends LazyLoggableWithImplicitLogger {
 
 }
 
-final case class HoistedTransformMetaData(logs: String, files: Seq[ParsedFile],
+final case class HoistedTransformMetaData(logs: String, aliases: List[Alias], nextRenderDate: Option[Long])
+ /*, files: Seq[ParsedFile],
                                           globalMetadata: MetadataValue,
                                           env: EnvironmentManager,
-                                          aliases: List[Alias])
+                                          aliases: List[Alias]*/
 
 
+trait PluginPhase1 extends Function1[List[ParsedFile], List[ParsedFile]]
+trait PluginPhase2 extends Function1[List[ParsedFile], List[ParsedFile]]
+trait PluginPhase3
