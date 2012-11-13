@@ -2,8 +2,7 @@ package org.hoisted.lib
 
 import net.liftweb._
 import common._
-import util.Html5
-import org.pegdown.{Extensions, PegDownProcessor}
+import util.{Helpers, Html5}
 import xml.{Elem, NodeSeq}
 
 /**
@@ -67,7 +66,19 @@ object MarkdownParser {
   def parse(in: String): Box[(NodeSeq, MetadataValue)] = {
     val (_in, retPairs) = readTopMetadata(in, true)
 
-    val pd = new PegDownProcessor(Extensions.FENCED_CODE_BLOCKS | Extensions.QUOTES | Extensions.SMARTYPANTS)
+    import eu.henkelmann.actuarius._
+
+    for {
+      str <- Helpers.tryo(ActuariusApp.apply(_in))
+      res = Html5.parse("<html><head><title>I eat yaks</title></head><body>"+str+"</body></html>")
+      info <- res.map{
+        res => (res \ "body").collect{case e: Elem => e}.flatMap(_.child)
+      }
+    } yield info -> retPairs
+
+    /*
+    val pd = new PegDownProcessor(Extensions.FENCED_CODE_BLOCKS | Extensions.SMARTYPANTS | Extensions.ABBREVIATIONS |
+    Extensions.TABLES | Extensions.DEFINITIONS) // | Extensions.QUOTES | Extensions.SMARTYPANTS)
     val raw = pd.markdownToHtml(
       _in.replace("![](", "![ ](") // Fixes #8 -- change when we change from Pegdown processor
     )
@@ -78,5 +89,6 @@ object MarkdownParser {
       res => (res \ "body").collect{case e: Elem => e}.flatMap(_.child)
     }
     r2.map(v => v -> retPairs)
+    */
   }
 }

@@ -42,7 +42,9 @@ libraryDependencies ++= {
     "org.yaml" % "snakeyaml" % "1.10",
     "junit" % "junit" % "4.7" % "test",
     "ch.qos.logback" % "logback-classic" % "1.0.6" % "compile" ,
-    "org.pegdown" %  "pegdown" % "1.1.0",
+    // "org.pegdown" %  "pegdown" % "1.2.0",
+    // "com.tristanhunt" %% "knockoff" % "0.8.1" ,
+    "eu.henkelmann" %% "actuarius" % "0.2.4",
     "org.eclipse.jgit" % "org.eclipse.jgit" % "1.3.0.201202151440-r",
     "org.mortbay.jetty" % "jetty" % "6.1.22" % "test",
     "org.scala-tools.testing" %% "specs" % "1.6.9" % "test"

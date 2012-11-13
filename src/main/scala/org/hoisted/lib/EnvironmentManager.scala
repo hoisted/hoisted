@@ -40,6 +40,16 @@ class EnvironmentManager() extends LazyLoggableWithImplicitLogger with Factory {
 
   def blogPosts: List[ParsedFile] = computePosts(pages)
 
+  private var _finalFuncs: List[Box[HoistedTransformMetaData] => Box[HoistedTransformMetaData]] = Nil
+
+  /**
+   * Add to the functions that will be run after the
+   * @param f
+   */
+  def addToFinalFuncs(f: Box[HoistedTransformMetaData] => Box[HoistedTransformMetaData]): Unit = _finalFuncs = _finalFuncs ::: List(f)
+
+  def finalFuncs: List[Box[HoistedTransformMetaData] => Box[HoistedTransformMetaData]] = _finalFuncs
+
 
   var pluginPhase: PartialFunction[HoistedPhase, Unit] = Map.empty
   var additionalKeys: List[MetadataKey] = Nil

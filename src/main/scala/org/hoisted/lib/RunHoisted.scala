@@ -298,7 +298,7 @@ trait HoistedRenderer extends LazyLoggableWithImplicitLogger {
           Logstream.doWith(log) {
             HoistedEnvironmentManager.doWith(environment) {
               val __inDir = seekInDir(_inDir)
-              for {
+              val r22 = for {
                 deleteAll <- HoistedUtil.logFailure("Deleting all files in " + outDir)(HoistedUtil.deleteAll(outDir))
                 theDir <- HoistedUtil.logFailure("Making dir " + outDir)(outDir.mkdirs())
                 inDir <- Full(__inDir).filter(_.exists()) ?~ "Failed to get source repository"
@@ -307,6 +307,8 @@ trait HoistedRenderer extends LazyLoggableWithImplicitLogger {
                 __parsedFiles_2 <- doInitialTemplating(env.removeRemoved(__parsedFiles_1))
                 res <- avoidScalaNamingHell(__parsedFiles_2, log, inDir, outDir)
               } yield res
+
+              environment.finalFuncs.foldLeft(r22)((res, f) => f(res))
             }
           }
         }

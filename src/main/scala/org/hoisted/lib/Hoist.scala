@@ -41,7 +41,9 @@ object Hoist extends LazyLoggableWithImplicitLogger {
     info match {
       case Info(_, _, f: Failure) =>
         logger.error("Failed to compile code "+f.msg); sys.exit(127)
-      case Info(Full(from), Full(to), _) => RunHoisted(new File(from), new File(to), HoistedEnvironmentManager.value)
+      case Info(Full(from), Full(to), _) =>
+        RunHoisted(new File(from), new File(to), HoistedEnvironmentManager.value)
+
       case _ => logger.error("Usage 'java -jar hoisted.jar source_directory destination_directory"); sys.exit(127)
     }
     }

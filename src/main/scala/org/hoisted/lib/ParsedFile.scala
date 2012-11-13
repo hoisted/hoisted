@@ -62,6 +62,8 @@ object ParsedFile extends LazyLoggableWithImplicitLogger {
         } yield HtmlFile(fi, html, info)
 
       case Some("md") | Some("mkd") =>
+        println("Reading "+fi.pathAndSuffix.display)
+        try {
         for {
           realFile <- fi.file
           whole <- HoistedUtil.logFailure("Reading "+realFile)(Helpers.readWholeFile(realFile))
@@ -69,7 +71,9 @@ object ParsedFile extends LazyLoggableWithImplicitLogger {
           (elems, rawMeta) <- MarkdownParser.parse(str)
 
         } yield MarkdownFile(fi, elems, rawMeta)
-
+        } finally {
+          println("Done with "+fi.pathAndSuffix.display)
+        }
       case Some("doc") | Some("docx") | Some("rtf") | Some("pages") =>
         (for {
           realFile <- fi.file
