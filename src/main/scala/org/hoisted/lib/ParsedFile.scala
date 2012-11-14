@@ -319,7 +319,7 @@ sealed trait HasHtml extends ParsedFile {
         try {
           Html5.write(this.html.collect {
             case e: Elem => e
-          }.headOption getOrElse <html/>, or, false, true)
+          }.headOption getOrElse <html/>, or, false, false)
         } finally {
           or.close()
         }

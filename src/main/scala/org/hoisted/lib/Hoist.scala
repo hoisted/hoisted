@@ -50,23 +50,55 @@ object Hoist extends LazyLoggableWithImplicitLogger {
   }
 
   case class Info(source: Box[String], dest: Box[String], classInfo: Box[(ClassLoader, Set[String])] = Empty)
+
+
   def slurpParams(p: List[String]): Info = {
+
 
     val (p2, cl) = {
       val (sc, notSc) = p.partition(_.toLowerCase().endsWith(".scala"))
-      val read = sc.flatMap(name => Helpers.tryo{(name -> new String(Helpers.readWholeFile(new File(name)), "UTF-8"))})
+      val read = sc.flatMap(name => Helpers.tryo {
+        (name -> new String(Helpers.readWholeFile(new File(name)), "UTF-8"))
+      })
 
       val ct = new CompileTool()
 
-      (notSc, Full(1).filter(i => !read.isEmpty).flatMap(i => {val res = ct.classloaderFor(read);
-        res}))
+      (notSc, Full(1).filter(i => !read.isEmpty).flatMap(i => {
+        val res = ct.classloaderFor(read);
+        res
+      }))
     }
 
+    def theRunner(in: Box[TelegramRunner]): TelegramRunner = in openOr (new TelegramRunner)
 
-    p2 match {
-    case from :: to :: Nil => Info(Full(from), Full(to), cl)
-    case _ => Info(Empty, Empty, cl)
-  }
+    def doIt(runner: Box[TelegramRunner], rest: List[String], toDo: List[String]): (Box[TelegramRunner], List[String]) = toDo match {
+      case Nil => runner -> rest
+      case "-tz" :: tz :: stuff => val r = theRunner(runner)
+      r.theTimeZone = tz
+      doIt(Full(r), rest, stuff)
+      case "-locale" :: locale :: stuff => val r = theRunner(runner)
+      r.theLocale = locale
+      doIt(Full(r), rest, stuff)
+      case "-site" :: site :: stuff => val r = theRunner(runner)
+      r.theSiteUrl = site
+      doIt(Full(r), rest, stuff)
+      case "-guid" :: guid :: stuff => val r = theRunner(runner)
+      r.theGuid = guid
+      doIt(Full(r), rest, stuff)
+      case "-rooturl" :: rooturl :: stuff => val r = theRunner(runner)
+      r.rootUrl = rooturl
+      doIt(Full(r), rest, stuff)
+      case x :: stuff => doIt(runner, rest ::: List(x), stuff)
+    }
+
+    val (runner, p3) = doIt(Empty, Nil, p2)
+
+    runner.map(_.apply())
+
+    p3 match {
+      case from :: to :: Nil => Info(Full(from), Full(to), cl)
+      case _ => Info(Empty, Empty, cl)
+    }
   }
 }
 
