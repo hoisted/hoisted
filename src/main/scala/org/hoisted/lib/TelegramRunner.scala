@@ -17,6 +17,9 @@ class TelegramRunner extends Function0[AnyRef] {
   import java.util._
   import org.joda.time._
 
+  var serverMode = false
+  var rootDir: String = ""
+
   var theLocale: String = "en_US" // en_US
   var theTimeZone: String = "PST"// PST
 
@@ -74,20 +77,34 @@ class TelegramRunner extends Function0[AnyRef] {
 
 
   def apply(): AnyRef = {
-    val em = HoistedEnvironmentManager.value
 
+    def emSetup(em: EnvironmentManager): EnvironmentManager = {
     em.setMetadata(SiteLinkKey, theSiteUrl)
 
-    em.externRepoLoader = Full(myRepoLoader)
-
+      if (!serverMode) {
+        em.externRepoLoader = Full(myRepoLoader)
+      }
 
     em.runWrapper = new CommonLoanWrapper() {
       def apply[T](f: => T): T =
         DateUtils.CurrentLocale.doWith(new Locale(theLocale))(
           DateUtils.CurrentTimeZone.doWith(DateTimeZone.forID(theTimeZone))(f))
     }
+      em
+    }
 
-    em.addToFinalFuncs(writeMetadata)
+    println("Running and server mode is "+serverMode+" dir "+rootDir)
+
+    if (serverMode) {
+      val server = new HttpStaticFileServer(8080)
+      server.run(new File(rootDir), emSetup(_))
+      while (true) {
+        Thread.sleep(1000)
+      }
+    } else {
+      val em = emSetup(HoistedEnvironmentManager.value)
+      em.addToFinalFuncs(writeMetadata)
+    }
 
     ""
   }

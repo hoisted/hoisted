@@ -12,17 +12,6 @@ import java.util.{Date, Locale}
 import java.io._
 import xml._
 
-object VeryTesty {
-
-
-  def apply() = {
-
-    DateUtils.CurrentLocale.doWith(Locale.FRANCE) {
-    RunHoisted(new File("/Users/dpp/proj/dpp-blog"),
-      new File("/Users/dpp/tmp/outfrog")).map(_.logs)
-    }
-  }
-}
 
 /**
  * This singleton will take a directory, find all the files in the directory
@@ -36,111 +25,7 @@ object CurrentFile extends ThreadGlobal[ParsedFile]
 
 object PostPageTransforms extends TransientRequestVar[Vector[NodeSeq => NodeSeq]](Vector())
 
-trait HoistedRenderer extends LazyLoggableWithImplicitLogger {
-  @scala.annotation.tailrec
-  private def seekInDir(in: File): File = {
-    if (!in.exists()) in
-    else {
-      def filesAsNonNullList(in: File): List[File] = {
-        if (null eq in) Nil
-        else if (!in.isDirectory) Nil
-        else {
-          val fa = in.listFiles()
-          if (null eq fa) Nil
-          else fa.toList.filter(v => null ne v).filter(f => null ne f.getName)
-        }
-      }
-
-      val all = filesAsNonNullList(in).
-        filter(!_.getName.startsWith(".")).filterNot(_.getName.toLowerCase.startsWith("readme"))
-
-      all match {
-        case Nil => in
-        case x :: Nil if !x.isDirectory => x
-        case x :: y :: _ => in
-        case x :: _ => seekInDir(x)
-      }
-    }
-  }
-
-  def bytes(in: ParsedFile): Array[Byte] = {
-    val os = new ByteArrayOutputStream()
-    in.writeTo(os)
-    os.toByteArray
-  }
-
-  /**
-   * Run any plugins in phase 1
-   * @param in the list of current parsed files
-   * @return the revised parsed files
-   */
-  def runPluginsPhase1(in: List[ParsedFile]): List[ParsedFile] = in.filter(pf => pf.fileInfo.pathAndSuffix.path match {
-    case "_scripts" :: rest if !rest.isEmpty && pf.fileInfo.suffix == Some("scala") => true
-    case x =>
-      false
-  }) match {
-    case Nil => in
-    case xs =>
-      val xfrom: List[PluginPhase1] = for {
-        (cl, names) <- (new CompileTool).classloaderFor(xs.map(pf => pf.fileInfo.pathAndSuffix.display -> new String(bytes(pf), "UTF-8"))).toList
-        namesToTest <- names.toList if (namesToTest.indexOf("$") < 0)
-        clz <- Helpers.tryo(Nil)(cl.loadClass(namesToTest).asInstanceOf[Class[AnyRef]]).toList if classOf[PluginPhase1].isAssignableFrom(clz)
-        inst <- Helpers.tryo(clz.newInstance()).toList
-      } yield inst.asInstanceOf[PluginPhase1]
-
-      xfrom.foldLeft(in)((cur: List[ParsedFile], func: PluginPhase1) => func.apply(cur))
-  }
-
-
-
-  /*
-  /**
-   * Run any plugins in phase 2
-   * @param in the list of current parsed files
-   * @return the revised parsed files
-   */
-  def runPluginsPhase2(in: List[ParsedFile]): List[ParsedFile] = in.filter(pf => pf.fileInfo.pathAndSuffix.path match {
-      case "_scripts" :: rest if !rest.isEmpty && pf.fileInfo.suffix == Some("scala") => true
-      case x =>
-        false
-    }) match {
-      case Nil => in
-      case xs =>
-        val xfrom: List[PluginPhase2] = for {
-          (cl, names) <- (new CompileTool).classloaderFor(xs.map(pf => pf.fileInfo.pathAndSuffix.display -> new String(bytes(pf), "UTF-8"))).toList
-          namesToTest <- names.toList if (namesToTest.indexOf("$") < 0)
-          clz <- Helpers.tryo(Nil)(cl.loadClass(namesToTest).asInstanceOf[Class[AnyRef]]).toList if classOf[PluginPhase2].isAssignableFrom(clz)
-          inst <- Helpers.tryo(clz.newInstance()).toList
-        } yield inst.asInstanceOf[PluginPhase2]
-
-        xfrom.foldLeft(in)((cur, func) => func(cur))
-    }*/
-
-  /**
-   * Collect the global metadata from the incoming files, then
-   * update the metadata for each file.  Then pull any externally referenced files
-   * and parse them and apply metadata.
-   *
-   * @param _in
-   * @return
-   */
-  def doMetadataMagicAndSuch(_in: List[ParsedFile]): Box[List[ParsedFile]] = {
-    _in.foreach(pf => env.updateGlobalMetadata(pf.metaData))
-
-    val in2 = _in.map(env.transformFile)
-
-    val in = runPluginsPhase1(in2)
-
-    val withLoadedTemplates =
-      env.findMetadata(ExternalLinkKey) match {
-        case Full(ListMetadataValue(lst)) => lst.foldLeft(in)(loadExternal)
-        case Full(md) => loadExternal(in, md)
-        case _ => in
-      }
-
-    Full(withLoadedTemplates)
-  }
-
+trait LoadExternal extends LazyLoggableWithImplicitLogger with TheEnv {
   private def dedupNames(first: List[ParsedFile], second: List[ParsedFile]): List[ParsedFile] = {
     val curSet = Set(first.map(_.fileInfo.pathAndSuffix.path): _*)
 
@@ -198,22 +83,33 @@ trait HoistedRenderer extends LazyLoggableWithImplicitLogger {
         } yield env.mergeTemplateSets(cur, filtered_2, true))) openOr cur
     }
   }
+}
 
-  /**
-   * Do an initial pass on the files to include other files
-   * @param in
-   * @return
-   */
-  def doInitialTemplating(in: List[ParsedFile]): Box[List[ParsedFile]] = {
-    env.allPages = in
-    env.pages = in.filter(env.isValid)
+trait HoistedRenderer extends LazyLoggableWithImplicitLogger with PluginRunner with LoadExternal {
+  @scala.annotation.tailrec
+  private def seekInDir(in: File): File = {
+    if (!in.exists()) in
+    else {
+      def filesAsNonNullList(in: File): List[File] = {
+        if (null eq in) Nil
+        else if (!in.isDirectory) Nil
+        else {
+          val fa = in.listFiles()
+          if (null eq fa) Nil
+          else fa.toList.filter(v => null ne v).filter(f => null ne f.getName)
+        }
+      }
 
-    val templates = createTemplateLookup(env.pages)
-    Full(in.map {
-      case f if env.isHtml(f) && env.shouldWriteFile(f) =>
-        runTemplater(f, templates, true, env.earlySnippets)
-      case other => other
-    })
+      val all = filesAsNonNullList(in).
+        filter(!_.getName.startsWith(".")).filterNot(_.getName.toLowerCase.startsWith("readme"))
+
+      all match {
+        case Nil => in
+        case x :: Nil if !x.isDirectory => x
+        case x :: y :: _ => in
+        case x :: _ => seekInDir(x)
+      }
+    }
   }
 
   def updateHeaderMetadata(in: List[ParsedFile]): Box[List[ParsedFile]] = {
@@ -225,66 +121,7 @@ trait HoistedRenderer extends LazyLoggableWithImplicitLogger {
     })
   }
 
-  private def avoidScalaNamingHell(__parsedFiles_2: List[ParsedFile],
-                                   log: ByteArrayOutputStream,
-                                   inDir: File, outDir: File): Box[HoistedTransformMetaData] = {
 
-    for {
-      __parsedFiles_3 <- updateHeaderMetadata(env.removeRemoved(__parsedFiles_2))
-      __parsedFiles = env.removeRemoved(__parsedFiles_3)
-      _ = env.allPages = __parsedFiles
-      _parsedFiles = __parsedFiles.filter(env.isValid)
-      parsedFilesPrime <- ensureTemplates(_parsedFiles)
-
-      _ = {
-        if (env.hasBlogPosts(parsedFilesPrime)) {
-          env.setMetadata(HasBlogKey, BooleanMetadataValue(true))
-        }
-      }
-
-      parsedFiles = env.filterBasedOnMetadata(parsedFilesPrime)
-
-      _ = HoistedEnvironmentManager.value.pages = parsedFiles
-
-      fileMap = byName(parsedFiles)
-      templates = createTemplateLookup(parsedFiles)
-      menu = env.computeMenuItems(parsedFiles)
-      _ = env.menuEntries = menu
-
-      transformedFiles = (env.syntheticFiles(parsedFiles).toList ::: parsedFiles).map(f =>
-        runTemplater(f, templates, false, env.snippets))
-
-      aliases = {
-        val ret = transformedFiles.flatMap(pf =>
-          pf.findData(AliasKey).toList.flatMap(_.forceListString).map(a => Alias(a, env.computeOutputFileName(pf)))
-        ).toList
-
-        ret
-      }
-
-      done <- HoistedUtil.logFailure("Writing rendered files")(writeFiles(transformedFiles, inDir, outDir))
-      _ = HoistedUtil.logFailure("Post run")(env.runPostRun(outDir))
-
-
-
-
-
-    }  yield {
-
-      val posts = env.allPages
-
-      val start = Helpers.millis
-
-      // schedule the next rendering
-      val when = posts.flatMap(p => {
-        val pair = env.computeFromToDates(p)
-        pair._1.toList ::: pair._2.toList
-      }).map(_.getMillis).filter(_ > start).sorted.headOption
-
-
-      HoistedTransformMetaData(new String(log.toByteArray), aliases, when /*, transformedFiles, env.metadata, env, aliases*/)
-    }
-  }
 
   def apply(_inDir: File, outDir: File, environment: EnvironmentManager = new EnvironmentManager): Box[HoistedTransformMetaData] = {
     environment.runWrapper {
@@ -302,11 +139,33 @@ trait HoistedRenderer extends LazyLoggableWithImplicitLogger {
                 deleteAll <- HoistedUtil.logFailure("Deleting all files in " + outDir)(HoistedUtil.deleteAll(outDir))
                 theDir <- HoistedUtil.logFailure("Making dir " + outDir)(outDir.mkdirs())
                 inDir <- Full(__inDir).filter(_.exists()) ?~ "Failed to get source repository"
-                orgFiles <- HoistedUtil.reportFailure("Loading files from " + inDir)(env.loadFilesFrom(inDir))
-                __parsedFiles_1 <- doMetadataMagicAndSuch(env.removeRemoved(orgFiles))
-                __parsedFiles_2 <- doInitialTemplating(env.removeRemoved(__parsedFiles_1))
-                res <- avoidScalaNamingHell(__parsedFiles_2, log, inDir, outDir)
-              } yield res
+                processedFiles <- RenderPipeline.build().apply(inDir)
+
+                aliases = {
+                  val ret = processedFiles.flatMap(pf =>
+                    pf.findData(AliasKey).toList.flatMap(_.forceListString).map(a => Alias(a, env.computeOutputFileName(pf)))
+                  ).toList
+
+                  ret
+                }
+
+                done <- HoistedUtil.logFailure("Writing rendered files")(writeFiles(processedFiles, outDir))
+                _ = HoistedUtil.logFailure("Post run")(env.runPostRun(outDir))
+              } yield {
+
+                val posts = env.allPages
+
+                val start = Helpers.millis
+
+                // schedule the next rendering
+                val when = posts.flatMap(p => {
+                  val pair = env.computeFromToDates(p)
+                  pair._1.toList ::: pair._2.toList
+                }).map(_.getMillis).filter(_ > start).sorted.headOption
+
+
+                HoistedTransformMetaData(new String(log.toByteArray), aliases, when /*, transformedFiles, env.metadata, env, aliases*/)
+              }
 
               environment.finalFuncs.foldLeft(r22)((res, f) => f(res))
             }
@@ -317,32 +176,10 @@ trait HoistedRenderer extends LazyLoggableWithImplicitLogger {
   }
 
 
-  def ensureTemplates(in: List[ParsedFile]): Box[List[ParsedFile]] =
-    if (env.needsTemplates(in)) {
-      val name = env.computeTemplateURL()
-      env.loadTemplates(name, in, false)
-    } else Full(in)
-
-  def dropSuffix(in: String): String = {
-    if (in.toLowerCase.endsWith(".cms.xml")) {
-      in.substring(0, in.length - 8)
-    } else in.lastIndexOf(".") match {
-      case x if x < 0 => in
-      case x => in.substring(0, x)
-    }
-  }
-
-  def captureSuffix(in: String): String = {
-    if (in.toLowerCase.endsWith(".cms.xml")) {
-      "cms.xml"
-    } else in.lastIndexOf(".") match {
-      case x if x < 0 => ""
-      case x => in.substring(x + 1)
-    }
-  }
 
 
-  def writeFiles(toWrite: Seq[ParsedFile], inDir: File, outDir: File): Unit = {
+
+  def writeFiles(toWrite: Seq[ParsedFile], outDir: File): Unit = {
     def translate(source: String): File = {
       new File(outDir.getAbsolutePath + source)
     }
@@ -369,6 +206,122 @@ trait HoistedRenderer extends LazyLoggableWithImplicitLogger {
     }
   }
 
+
+  def byName(in: Seq[ParsedFile]): Map[String, List[ParsedFile]] = {
+    in.foldLeft[Map[String, List[ParsedFile]]](Map.empty) {
+      (m, f) =>
+        val name = f.fileInfo.name
+
+        m + (name -> (f :: m.getOrElse(name, Nil)))
+    }
+  }
+
+  def byPureName(in: Seq[ParsedFile]): Map[String, List[ParsedFile]] = {
+    in.foldLeft[Map[String, List[ParsedFile]]](Map.empty) {
+      (m, f) =>
+        val name = f.fileInfo.pureName
+
+        m + (name -> (f :: m.getOrElse(name, Nil)))
+    }
+  }
+
+
+}
+
+
+trait PluginRunner extends FileListDiffer {
+  private var lastList: List[ParsedFile] = Nil
+
+  private var classLoaderInfo: Box[(ClassLoader, Set[String])] = Empty
+
+  /**
+   * Run any plugins in phase 1
+   * @param in the list of current parsed files
+   * @return the revised parsed files
+   */
+  def runPluginsPhase1(in: List[ParsedFile]): List[ParsedFile] =
+  {
+    val scripts: List[ParsedFile] = in.filter(pf => pf.fileInfo.pathAndSuffix.path match {
+    case "_scripts" :: rest if !rest.isEmpty && pf.fileInfo.suffix == Some("scala") => true
+    case x =>
+      false
+  })
+
+
+   scripts match {
+    case Nil => in
+    case xs =>
+      val xfrom: List[PluginPhase1] = for {
+        (cl, names) <- ((classLoaderInfo.filter(ignore => same_?(xs, lastList)))  or
+          (new CompileTool).classloaderFor(xs.flatMap(pf => pf.bytes.toList.map (bytes => pf.fileInfo.pathAndSuffix.display -> new String(bytes, "UTF-8"))))).toList
+      _ = {classLoaderInfo = Full(cl -> names); lastList = xs}
+        namesToTest <- names.toList if (namesToTest.indexOf("$") < 0)
+        clz <- Helpers.tryo(Nil)(cl.loadClass(namesToTest).asInstanceOf[Class[AnyRef]]).toList if classOf[PluginPhase1].isAssignableFrom(clz)
+        inst <- Helpers.tryo(clz.newInstance()).toList
+      } yield inst.asInstanceOf[PluginPhase1]
+
+      xfrom.foldLeft(in)((cur: List[ParsedFile], func: PluginPhase1) => func.apply(cur))
+  }
+  }
+}
+
+trait TheEnv {
+  lazy val env = HoistedEnvironmentManager.value
+}
+
+trait FileListDiffer {
+
+  @scala.annotation.tailrec
+  final def same_?(one: List[ParsedFile], two: List[ParsedFile]): Boolean = (one, two) match {
+    case (Nil, Nil) => true
+    case (_, Nil) => false
+    case (Nil, _) => false
+    case (x :: r1, y :: r2) =>
+      if (x.fileInfo.pathAndSuffix != y.pathAndSuffix) false
+      else if (x.lastModified != y.lastModifiedAtBuild) false
+      else same_?(r1, r2)
+  }
+
+}
+
+final case class HoistedTransformMetaData(logs: String, aliases: List[Alias], nextRenderDate: Option[Long])
+
+case class LoadFiles(current: Map[PathAndSuffix, ParsedFile]) extends Function1[File, Box[List[ParsedFile]]] with LazyLoggableWithImplicitLogger with TheEnv {
+  def apply(dir: File): Box[List[ParsedFile]] =
+    HoistedUtil.reportFailure("Loading files from " + dir)(env.loadFilesFrom(dir, current))
+}
+
+case class RemoveRemoved() extends Function1[Box[List[ParsedFile]], Box[List[ParsedFile]]] with TheEnv {
+  def apply(in: Box[List[ParsedFile]]): Box[List[ParsedFile]] = {
+    for {
+      files <- in
+    } yield env.removeRemoved(files)
+  }
+}
+
+
+trait Templater extends TheEnv with LazyLoggableWithImplicitLogger {
+
+  def testFunc: ParsedFile => Boolean
+
+  def dropSuffix(in: String): String = {
+    if (in.toLowerCase.endsWith(".cms.xml")) {
+      in.substring(0, in.length - 8)
+    } else in.lastIndexOf(".") match {
+      case x if x < 0 => in
+      case x => in.substring(0, x)
+    }
+  }
+
+  def captureSuffix(in: String): String = {
+    if (in.toLowerCase.endsWith(".cms.xml")) {
+      "cms.xml"
+    } else in.lastIndexOf(".") match {
+      case x if x < 0 => ""
+      case x => in.substring(x + 1)
+    }
+  }
+
   type TemplateLookup = PartialFunction[(List[String], String), ParsedFile]
 
   def createTemplateLookup(in: Seq[ParsedFile]): TemplateLookup = {
@@ -381,13 +334,16 @@ trait HoistedRenderer extends LazyLoggableWithImplicitLogger {
     Map(in.map(f => (makeName(f), f)): _*)
   }
 
-  def env = HoistedEnvironmentManager.value
+
+
+
 
   def runTemplater(_f: ParsedFile, templates: TemplateLookup, ignoreTemplateFailure: Boolean,
                    snippets: PartialFunction[(String, String), Box[NodeSeq => NodeSeq]]): ParsedFile = {
     _f match {
-      case f: ParsedFile with HasHtml if HoistedEnvironmentManager.value.isHtml(f) =>
+      case f: ParsedFile with HasHtml if testFunc(f) && HoistedEnvironmentManager.value.isHtml(f) =>
 
+        println("Running templater for "+f.fileInfo.pathAndSuffix.display)
         val lu = new PartialFunction[(Locale, List[String]), Box[NodeSeq]] {
           def isDefinedAt(in: (Locale, List[String])): Boolean = {
 
@@ -519,35 +475,147 @@ trait HoistedRenderer extends LazyLoggableWithImplicitLogger {
       case ret => ret
     }
   }
-
-  def byName(in: Seq[ParsedFile]): Map[String, List[ParsedFile]] = {
-    in.foldLeft[Map[String, List[ParsedFile]]](Map.empty) {
-      (m, f) =>
-        val name = f.fileInfo.name
-
-        m + (name -> (f :: m.getOrElse(name, Nil)))
-    }
-  }
-
-  def byPureName(in: Seq[ParsedFile]): Map[String, List[ParsedFile]] = {
-    in.foldLeft[Map[String, List[ParsedFile]]](Map.empty) {
-      (m, f) =>
-        val name = f.fileInfo.pureName
-
-        m + (name -> (f :: m.getOrElse(name, Nil)))
-    }
-  }
-
-
 }
 
-final case class HoistedTransformMetaData(logs: String, aliases: List[Alias], nextRenderDate: Option[Long])
- /*, files: Seq[ParsedFile],
-                                          globalMetadata: MetadataValue,
-                                          env: EnvironmentManager,
-                                          aliases: List[Alias]*/
+case class DoInitialTemplating(testFunc: ParsedFile => Boolean) extends Function1[Box[List[ParsedFile]], Box[List[ParsedFile]]] with Templater {
+  /**
+   * Do an initial pass on the files to include other files
+   * @param in
+   * @return
+   */
+  def doInitialTemplating(in: List[ParsedFile]): Box[List[ParsedFile]] = {
+    env.allPages = in
+    env.pages = in.filter(env.isValid)
 
+    val templates = createTemplateLookup(env.pages)
+    Full(in.map {
+      case f if env.isHtml(f) && env.shouldWriteFile(f) =>
+        runTemplater(f, templates, true, env.earlySnippets)
+      case other => other
+    })
+  }
+
+  def apply(in: Box[List[ParsedFile]]): Box[List[ParsedFile]] =
+  for {
+    files <- in
+    res <- doInitialTemplating(files)
+  } yield res
+}
+
+case class UpdateHeaderMetaData() extends Function1[Box[List[ParsedFile]], Box[List[ParsedFile]]] with LazyLoggableWithImplicitLogger with TheEnv  {
+  def updateHeaderMetadata(in: List[ParsedFile]): Box[List[ParsedFile]] = {
+    Full(in.map {
+      case h: HasHtml =>
+        val (html, metadata) = ParsedFile.findHeaders(h.html)
+        h.updateHtml(html).updateMetadata(h.metaData +&+ metadata)
+      case x => x
+    })
+  }
+
+  def apply(in: Box[List[ParsedFile]]): Box[List[ParsedFile]] =
+  in.flatMap(updateHeaderMetadata(_))
+}
+
+trait ThingTemplate extends Function1[Box[List[ParsedFile]], Box[List[ParsedFile]]] with LazyLoggableWithImplicitLogger with TheEnv  {
+  def doThing: List[ParsedFile] => Box[List[ParsedFile]]
+
+  def apply(in: Box[List[ParsedFile]]): Box[List[ParsedFile]] =
+    in.flatMap(doThing)
+}
+
+case class FilterValid() extends ThingTemplate {
+  def doThing = x => Full(x.filter(env.isValid))
+}
+
+case class EnsureTemplates() extends ThingTemplate {
+  def doThing =   in =>
+  if (env.needsTemplates(in)) {
+    val name = env.computeTemplateURL()
+    env.loadTemplates(name, in, false)
+  } else Full(in)
+}
+
+case class TestAndSetBlogKey() extends ThingTemplate {
+  def doThing = in => {
+    if (env.hasBlogPosts(in)) {
+      env.setMetadata(HasBlogKey, BooleanMetadataValue(true))
+    }
+    Full(in)
+  }
+}
+
+case class FilterBasedOnMetadata() extends ThingTemplate {
+  def doThing = in  => {
+    val ret = env.filterBasedOnMetadata(in)
+    env.pages = ret
+    Full(ret)
+  }
+}
+
+case class DoFinalRender(testFunc: ParsedFile => Boolean) extends ThingTemplate with Templater {
+  def doThing = in => {
+    val templates = createTemplateLookup(in)
+    val menu = env.computeMenuItems(in)
+    env.menuEntries = menu
+
+    Full((env.syntheticFiles(in).toList ::: in).map(f =>
+      runTemplater(f, templates, false, env.snippets)))
+  }
+}
+
+case class DoMetaMagicAndSuch(fetchExternalSites: Boolean) extends Function1[Box[List[ParsedFile]], Box[List[ParsedFile]]] with LazyLoggableWithImplicitLogger with TheEnv with PluginRunner with LoadExternal {
+
+
+  def apply(in: Box[List[ParsedFile]]): Box[List[ParsedFile]] = {
+    /**
+     * Collect the global metadata from the incoming files, then
+     * update the metadata for each file.  Then pull any externally referenced files
+     * and parse them and apply metadata.
+     *
+     * @param _in
+     * @return
+     */
+    def doMetadataMagicAndSuch(_in: List[ParsedFile]): List[ParsedFile] = {
+      env.clearMetadata()
+      _in.foreach(pf => env.updateGlobalMetadata(pf.metaData))
+
+      val in2 = _in.map(env.transformFile)
+
+      val in = runPluginsPhase1(in2)
+
+      val withLoadedTemplates =
+        env.findMetadata(ExternalLinkKey) match {
+          case Full(ListMetadataValue(lst)) if fetchExternalSites => lst.foldLeft(in)(loadExternal)
+          case Full(md) if fetchExternalSites => loadExternal(in, md)
+          case _ => in
+        }
+
+      withLoadedTemplates
+    }
+
+    for {
+       theFiles <- in
+    } yield doMetadataMagicAndSuch(theFiles)
+  }
+}
+
+object RenderPipeline {
+
+  def buildPreloaded(loadExternalSites: Boolean = true,
+                     filterPages: ParsedFile => Boolean = ignore => true):
+  Box[List[ParsedFile]] => Box[List[ParsedFile]] = RemoveRemoved() andThen DoMetaMagicAndSuch(loadExternalSites) andThen RemoveRemoved() andThen
+    DoInitialTemplating(filterPages) andThen RemoveRemoved() andThen UpdateHeaderMetaData() andThen
+    RemoveRemoved() andThen FilterValid() andThen EnsureTemplates() andThen
+    TestAndSetBlogKey() andThen FilterBasedOnMetadata() andThen
+    DoFinalRender(filterPages)
+
+  def build(loadExternalSites: Boolean = true,
+             filterPages: ParsedFile => Boolean = ignore => true,
+             currentFiles: Map[PathAndSuffix, ParsedFile] = Map.empty):
+  File => Box[List[ParsedFile]] =
+    LoadFiles(currentFiles) andThen buildPreloaded(loadExternalSites, filterPages)
+}
 
 trait PluginPhase1 extends Function1[List[ParsedFile], List[ParsedFile]]
-trait PluginPhase2 extends Function1[List[ParsedFile], List[ParsedFile]]
-trait PluginPhase3
+
+

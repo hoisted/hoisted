@@ -2,7 +2,7 @@ package org.hoisted.lib
 
 import net.liftweb._
 import common._
-import util.{Helpers, Html5}
+import util.{Helpers}
 import xml.{Elem, NodeSeq}
 
 /**
@@ -29,7 +29,9 @@ object MarkdownParser {
   def childrenOfBody(in: NodeSeq): NodeSeq = {
     (in \ "body").toList match {
       case Nil => in
-      case xs => xs.collect{case e: Elem => e}.flatMap(_.child)
+      case xs => xs.collect {
+        case e: Elem => e
+      }.flatMap(_.child)
     }
   }
 
@@ -58,7 +60,8 @@ object MarkdownParser {
 
     val pairs2: MetadataValue = if (markdownFormat)
       KeyedMetadataValue.build(linkDefs.findAllIn(_in).
-        matchData.toList.map(md => (md.group(1).trim, md.group(2).trim))) else NullMetadataValue
+        matchData.toList.map(md => (md.group(1).trim, md.group(2).trim)))
+    else NullMetadataValue
 
     (_in, p2.foldLeft(pairs2)(_ +&+ _))
   }
@@ -68,27 +71,18 @@ object MarkdownParser {
 
     import eu.henkelmann.actuarius._
 
+
+    ActuariusApp.synchronized{
     for {
       str <- Helpers.tryo(ActuariusApp.apply(_in))
-      res = Html5.parse("<html><head><title>I eat yaks</title></head><body>"+str+"</body></html>")
-      info <- res.map{
-        res => (res \ "body").collect{case e: Elem => e}.flatMap(_.child)
+      res = HoistedHtml5.parse("<html><head><title>I eat yaks</title></head><body>" + str + "</body></html>")
+      info <- res.map {
+        res => (res \ "body").collect {
+          case e: Elem => e
+        }.flatMap(_.child)
       }
     } yield info -> retPairs
-
-    /*
-    val pd = new PegDownProcessor(Extensions.FENCED_CODE_BLOCKS | Extensions.SMARTYPANTS | Extensions.ABBREVIATIONS |
-    Extensions.TABLES | Extensions.DEFINITIONS) // | Extensions.QUOTES | Extensions.SMARTYPANTS)
-    val raw = pd.markdownToHtml(
-      _in.replace("![](", "![ ](") // Fixes #8 -- change when we change from Pegdown processor
-    )
-
-    val res = Html5.parse("<html><head><title>I eat yaks</title></head><body>"+raw+"</body></html>")
-
-    val r2: Box[NodeSeq] = res.map{
-      res => (res \ "body").collect{case e: Elem => e}.flatMap(_.child)
     }
-    r2.map(v => v -> retPairs)
-    */
+
   }
 }

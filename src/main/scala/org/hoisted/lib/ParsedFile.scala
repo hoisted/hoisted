@@ -30,7 +30,12 @@ object ParsedFile extends LazyLoggableWithImplicitLogger {
     (in \ "content").headOption.map(_.child) getOrElse in
 
 
-  def apply(fi: FileInfo): Box[ParsedFile] = {
+  def apply(fi: FileInfo, current: Map[PathAndSuffix, ParsedFile]): Box[ParsedFile] = {
+    current.get(fi.pathAndSuffix).filter(pf => {
+      val ret = pf.lastModifiedAtBuild == pf.lastModified
+      if (!ret) println("Testing "+fi.pathAndSuffix.display+" ret "+ret)
+      ret
+    }) orElse {
     fi.suffix.map(_.toLowerCase) match {
       case Some("yaml") =>
         for {
@@ -57,13 +62,11 @@ object ParsedFile extends LazyLoggableWithImplicitLogger {
           bytes <- HoistedUtil.logFailure("Reading "+realFile)(Helpers.readWholeStream(fis))
           str = new String(bytes, "UTF-8")
           (str2, info) = MarkdownParser.readTopMetadata(str, false)
-          html <- parseHtml5File(str2)
+           html <- parseHtml5File(str2)
           _ <- HoistedUtil.logFailure("Closing "+realFile)(fis.close())
         } yield HtmlFile(fi, html, info)
 
       case Some("md") | Some("mkd") =>
-        println("Reading "+fi.pathAndSuffix.display)
-        try {
         for {
           realFile <- fi.file
           whole <- HoistedUtil.logFailure("Reading "+realFile)(Helpers.readWholeFile(realFile))
@@ -71,9 +74,7 @@ object ParsedFile extends LazyLoggableWithImplicitLogger {
           (elems, rawMeta) <- MarkdownParser.parse(str)
 
         } yield MarkdownFile(fi, elems, rawMeta)
-        } finally {
-          println("Done with "+fi.pathAndSuffix.display)
-        }
+
       case Some("doc") | Some("docx") | Some("rtf") | Some("pages") =>
         (for {
           realFile <- fi.file
@@ -84,8 +85,7 @@ object ParsedFile extends LazyLoggableWithImplicitLogger {
           myParser = new AutoDetectParser()
           thing <- HoistedUtil.logFailure("Trying to read word, rtf, whatever "+realFile)(try {myParser.parse(inputStream, handler, metadata)} finally {tryo(inputStream.close)})
           str = new String(out.toByteArray, "UTF-8")
-          html <- parseHtml5File(str).map(MarkdownParser.childrenOfBody(_))
-
+          html <- parseHtml5File(str)
         } yield {
 
 
@@ -98,10 +98,13 @@ object ParsedFile extends LazyLoggableWithImplicitLogger {
                 case xs => map + (k2 -> ListMetadataValue(xs.map(MetadataValue(_))))
               }}.toList)
 
-          HtmlFile(fi, html ,md)}) or Full(OtherFile(fi))
+          HtmlFile(fi, MarkdownParser.childrenOfBody(html) ,md)}) or Full(OtherFile(fi))
 
-      case _ => Full(OtherFile(fi))
+      case _ =>
+        logger.info("Creating otherfile for "+fi.pathAndSuffix.display)
+        Full(OtherFile(fi))
     }
+  }
   }
 
   private object GetHeader {
@@ -206,12 +209,12 @@ object ParsedFile extends LazyLoggableWithImplicitLogger {
     val i4 = in.indexOf("</html")
     if (i1 >= -1 && i2 >= -2 && i3 >= 0 && i4 >= 0 &&
     i1 < i2 && i2 < i3 && i3 < i4) {
-      Html5.parse(in.trim) match {
+      HoistedHtml5.parse(in.trim) match {
         case Full(ThinHtml(html)) => Full(html)
         case x => x
       }
     } else {
-      val res = Html5.parse("<html><head><title>I eat yaks</title></head><body>"+in+"</body></html>")
+      val res = HoistedHtml5.parse("<html><head><title>I eat yaks</title></head><body>"+in+"</body></html>")
 
       res.map{
         res => (res \ "body").collect{case e: Elem => e}.flatMap(_.child)
@@ -290,7 +293,9 @@ sealed trait ParsedFile {
 
   def pathAndSuffix: PathAndSuffix = fileInfo.pathAndSuffix
 
-  // def hidden: Boolean = !fileInfo.pathAndSuffix.path.filter(_.startsWith("_")).isEmpty
+  val lastModifiedAtBuild: Long = lastModified
+
+  def lastModified: Long = fileInfo.file.map(_.lastModified()) openOr Helpers.millis
 
   def uniqueId: String
 
@@ -314,17 +319,17 @@ sealed trait HasHtml extends ParsedFile {
 
   def writeTo(out: OutputStream): Unit = {
    if (HoistedEnvironmentManager.value.isHtml(this))  {
-        val or = new PrintWriter(out)
+        val or = new OutputStreamWriter(out, "UTF-8")
         or.write("<!DOCTYPE html>\n")
         try {
-          Html5.write(this.html.collect {
+          HoistedHtml5.write(this.html.collect {
             case e: Elem => e
           }.headOption getOrElse <html/>, or, false, false)
         } finally {
           or.close()
         }
   } else {
-     val or = new PrintWriter(out)
+     val or = new OutputStreamWriter(out, "UTF-8")
         try {
           or.write(this.html.text)
         } finally {
@@ -373,8 +378,6 @@ final case class XmlFile(fileInfo: FileInfo,
   type MyType = XmlFile
 
   def updateFileInfo(newFileInfo: FileInfo): XmlFile = copy(fileInfo = newFileInfo)
-
-
 
   def updateMetadata(newMd: MetadataValue): XmlFile = copy(metaData =  newMd)
   def updateHtml(newHtml: NodeSeq): XmlFile = copy(html = newHtml)
@@ -467,6 +470,15 @@ final case class FileInfo(file: Box[File], relPath: String, name: String, pureNa
     PathAndSuffix(relPath.toLowerCase.roboSplit("/").dropRight(1) ::: List(name.toLowerCase), suffix.map(_.toLowerCase))
 }
 
+object PathAndSuffix {
+  def buildMap(in: List[ParsedFile]): Map[PathAndSuffix, ParsedFile] =
+  in.foldLeft(Map[PathAndSuffix, ParsedFile]())((m, pf) => m + (pf.fileInfo.pathAndSuffix -> pf))
+
+  def onlyCurrent(in: Map[PathAndSuffix, ParsedFile]): Map[PathAndSuffix, ParsedFile] =
+  in.filter {
+    case (key, value) => value.fileInfo.file.map(_.exists()) openOr false
+  }
+}
 
 final case class PathAndSuffix(path: List[String], suffix: Option[String]) {
   def display: String = path.mkString("/", "/", "") + (suffix.map(s => "." + s) getOrElse "")

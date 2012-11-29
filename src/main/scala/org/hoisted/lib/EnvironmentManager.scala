@@ -10,10 +10,9 @@ import util._
 import Helpers._
 import org.joda.time.{DateTimeZone, DateTime}
 import org.eclipse.jgit.api.Git
-import java.io.{PrintWriter,  File}
+import java.io.{OutputStreamWriter,  File}
 import xml.{Text, Elem, Node, NodeSeq}
 import org.joda.time.format.{DateTimeFormat, DateTimeFormatter}
-import java.util.Locale
 
 /**
  * Created with IntelliJ IDEA.
@@ -30,7 +29,7 @@ trait HoistedPhase {
 final case class PostRenderPhase(location: File, environment: EnvironmentManager) extends HoistedPhase
 
 class EnvironmentManager() extends LazyLoggableWithImplicitLogger with Factory {
-  val startTime = Helpers.millis
+  private val startTime = Helpers.millis
   private var _metadata: MetadataValue = NullMetadataValue
   var menuEntries: List[MenuEntry] = Nil
   var pages: List[ParsedFile] = Nil
@@ -38,7 +37,10 @@ class EnvironmentManager() extends LazyLoggableWithImplicitLogger with Factory {
 
   def metadata: MetadataValue = _metadata
 
-  def blogPosts: List[ParsedFile] = computePosts(pages)
+  def blogPosts: List[ParsedFile] = {
+    logger.info("Computing blog posts pages "+pages.length)
+    computePosts(pages)
+  }
 
   private var _finalFuncs: List[Box[HoistedTransformMetaData] => Box[HoistedTransformMetaData]] = Nil
 
@@ -403,13 +405,19 @@ class EnvironmentManager() extends LazyLoggableWithImplicitLogger with Factory {
     )
   }
 
+  private var templateDir: Box[File] = Empty
+
   def loadTemplates: (String, List[ParsedFile], Boolean) => Box[List[ParsedFile]] = (url, cur, forceMerge) => {
-    val dir = File.createTempFile("telegram_", "_template")
-    addToPostRun(() => HoistedUtil.deleteAll(dir))
 
     for {
-      cloned <- HoistedUtil.reportFailure("Trying to load resource " + url)(loadRepoIntoDir(url, dir))
-      parsedFiles <- HoistedUtil.reportFailure("Loading files from templates cloned from " + url)(this.loadFilesFrom(dir))
+      theDir <- HoistedUtil.reportFailure("Trying to load resource " + url)(
+        templateDir or
+          {
+            val dir = File.createTempFile("telegram_", "_template")
+            addToPostRun(() => HoistedUtil.deleteAll(dir))
+
+            loadRepoIntoDir(url, dir).map(ignore => {templateDir = Full(dir); dir})})
+      parsedFiles <- HoistedUtil.reportFailure("Loading files from templates cloned from " + url)(this.loadFilesFrom(theDir, Map.empty))
     } yield mergeTemplateSets(cur, parsedFiles, forceMerge)
   }
 
@@ -495,7 +503,15 @@ class EnvironmentManager() extends LazyLoggableWithImplicitLogger with Factory {
     }
 
 
-  def updateGlobalMetadata: MetadataValue => Unit = md => {
+  var updateGlobalMetadata: MetadataValue => Unit = _updateGlobalMetadata
+
+  var clearMetadata: () => Unit = _clearMetadata _
+
+  def _clearMetadata() {
+    _metadata = NullMetadataValue
+  }
+
+  def _updateGlobalMetadata: MetadataValue => Unit = md => {
     md match {
       case KeyedMetadataValue(keys) => keys.foreach{
         case (k@GlobalLocaleKey, locale) =>
@@ -660,7 +676,7 @@ class EnvironmentManager() extends LazyLoggableWithImplicitLogger with Factory {
         List(SyntheticFile(() => FileInfo(Empty, "/", "rss", "rss.xml", Some("xml")),
           () => KeyedMetadataValue(List(DateKey -> DateTimeMetadataValue(new DateTime()))),
           out => {
-            val pw = new PrintWriter(out)
+            val pw = new OutputStreamWriter(out, "UTF-8")
             val postInfo: HasHtml => NodeSeq =
             if (findMetadata(FullRssContent).flatMap(_.asBoolean) openOr false) {
               post => post.html
@@ -671,7 +687,7 @@ class EnvironmentManager() extends LazyLoggableWithImplicitLogger with Factory {
               }
             }
 
-            pw.println("<?xml version=\"1.0\" encoding=\"UTF-8\"?>")
+            pw.write("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n")
             val xml =
               <feed xmlns="http://www.w3.org/2005/Atom">
                 <title type="text">{siteTitle()}</title>
@@ -707,7 +723,7 @@ class EnvironmentManager() extends LazyLoggableWithImplicitLogger with Factory {
                 </entry>)}
               </feed>
 
-            pw.print(xml.toString)
+            pw.write(xml.toString)
             pw.flush()
             pw.close()
           }))
@@ -726,8 +742,9 @@ class EnvironmentManager() extends LazyLoggableWithImplicitLogger with Factory {
   }
 
 
+  var loadFilesFrom: (File, Map[PathAndSuffix, ParsedFile])  => Box[List[ParsedFile]] = _loadFilesFrom
 
-  def loadFilesFrom(inDir: File): Box[List[ParsedFile]] = {
+  def _loadFilesFrom(inDir: File, current: Map[PathAndSuffix, ParsedFile]): Box[List[ParsedFile]] = {
     def computeFileInfo(f: File): FileInfo = {
       val cp: String = f.getAbsolutePath().substring(inDir.getAbsolutePath.length)
       val pureName = f.getName
@@ -745,13 +762,16 @@ class EnvironmentManager() extends LazyLoggableWithImplicitLogger with Factory {
 
     fileInfo <- HoistedUtil.logFailure("File Info for allFiles")(allFiles.map(computeFileInfo(_)))
 
-    ret <- HoistedUtil.logFailure("Reading files")(fileInfo.flatMap(fi => HoistedUtil.reportFailure("Loading "+fi.pathAndSuffix.display)(ParsedFile(fi))))
+    ret <- HoistedUtil.logFailure("Reading files")(fileInfo.flatMap(fi =>
+      HoistedUtil.reportFailure("Loading "+fi.pathAndSuffix.display)(ParsedFile(fi, current))))
 
   } yield ret.filter(_.findData(RemovedKey).isEmpty)
   }
 
 
-  def computeGuid: ParsedFile => String = pf => siteGuid() +":"+Helpers.hashHex(computeLink(pf))
+  var computeGuid: ParsedFile => String = _computeGuid
+
+  def _computeGuid: ParsedFile => String = pf => siteGuid() +":"+Helpers.hashHex(computeLink(pf))
 
   def siteGuid: () => String = () => Helpers.hashHex(siteLink())
 

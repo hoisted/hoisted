@@ -73,6 +73,13 @@ object Hoist extends LazyLoggableWithImplicitLogger {
 
     def doIt(runner: Box[TelegramRunner], rest: List[String], toDo: List[String]): (Box[TelegramRunner], List[String]) = toDo match {
       case Nil => runner -> rest
+      case "-server" :: dir :: _ =>
+        println("In server mode")
+        val r = theRunner(runner)
+        r.serverMode = true
+        r.rootDir = dir
+        (Full(r), Nil)
+
       case "-tz" :: tz :: stuff => val r = theRunner(runner)
       r.theTimeZone = tz
       doIt(Full(r), rest, stuff)
@@ -209,7 +216,7 @@ object HoistedUtil {
     if (exp eq null) "" else {
       (if (first) "" else "Enclosed ")+
     "Exception: "+exp.toString+"\n" +
-    "Stack Trace: "+exp.getStackTrace.toList.take(20).map(i => "         "+i.toString).mkString("\n", "\n", "\n") +
+    "Stack Trace: "+exp.getStackTrace.toList.take(50).map(i => "         "+i.toString).mkString("\n", "\n", "\n") +
       prettyPrintExceptionInfo(exp.getCause, false)
     }
   }
