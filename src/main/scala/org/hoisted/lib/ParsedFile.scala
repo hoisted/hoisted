@@ -30,10 +30,9 @@ object ParsedFile extends LazyLoggableWithImplicitLogger {
     (in \ "content").headOption.map(_.child) getOrElse in
 
 
-  def apply(fi: FileInfo, current: Map[PathAndSuffix, ParsedFile]): Box[ParsedFile] = {
-    current.get(fi.pathAndSuffix).filter(pf => {
+  def apply(fi: FileInfo, current: Map[String, ParsedFile]): Box[ParsedFile] = {
+    current.get(fi.pathAndSuffix.display).filter(pf => {
       val ret = pf.lastModifiedAtBuild == pf.lastModified
-      if (!ret) println("Testing "+fi.pathAndSuffix.display+" ret "+ret)
       ret
     }) orElse {
     fi.suffix.map(_.toLowerCase) match {
@@ -101,7 +100,6 @@ object ParsedFile extends LazyLoggableWithImplicitLogger {
           HtmlFile(fi, MarkdownParser.childrenOfBody(html) ,md)}) or Full(OtherFile(fi))
 
       case _ =>
-        logger.info("Creating otherfile for "+fi.pathAndSuffix.display)
         Full(OtherFile(fi))
     }
   }
@@ -471,10 +469,10 @@ final case class FileInfo(file: Box[File], relPath: String, name: String, pureNa
 }
 
 object PathAndSuffix {
-  def buildMap(in: List[ParsedFile]): Map[PathAndSuffix, ParsedFile] =
-  in.foldLeft(Map[PathAndSuffix, ParsedFile]())((m, pf) => m + (pf.fileInfo.pathAndSuffix -> pf))
+  def buildMap(in: List[ParsedFile]): Map[String, ParsedFile] =
+  in.foldLeft(Map[String, ParsedFile]())((m, pf) => m + (pf.fileInfo.pathAndSuffix.display -> pf))
 
-  def onlyCurrent(in: Map[PathAndSuffix, ParsedFile]): Map[PathAndSuffix, ParsedFile] =
+  def onlyCurrent(in: Map[String, ParsedFile]): Map[String, ParsedFile] =
   in.filter {
     case (key, value) => value.fileInfo.file.map(_.exists()) openOr false
   }

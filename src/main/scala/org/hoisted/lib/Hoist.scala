@@ -117,7 +117,39 @@ trait LazyLoggableWithImplicitLogger extends LazyLoggable {
   protected implicit def __myImplicitLoggerDude = logger
 }
 
-object HoistedUtil {
+object HoistedUtil extends LazyLoggableWithImplicitLogger {
+  def allFiles(dir: File, filter: File => Boolean): List[File] = {
+    if (!filter(dir)) Nil
+    else if (dir.isDirectory()) {
+      dir.listFiles().toList.flatMap(allFiles(_, filter))
+    } else if (dir.isFile() && !dir.getName.startsWith(".")) List(dir)
+    else Nil
+  }
+
+  def loadFilesFrom(inDir: File, current: Map[String, ParsedFile]): Box[List[ParsedFile]] = {
+    def computeFileInfo(f: File): FileInfo = {
+      val cp: String = f.getAbsolutePath().substring(inDir.getAbsolutePath.length)
+      val pureName = f.getName
+      val dp = pureName.lastIndexOf(".")
+      val (name, suf) = if (dp <= 0) (pureName, None)
+      else if (pureName.toLowerCase.endsWith(".cms.xml"))
+        (pureName.substring(0, pureName.length - 8), Some("cms.xml"))
+      else (pureName.substring(0, dp),
+        Some(pureName.substring(dp + 1)))
+      FileInfo(Full(f), cp, name, pureName, suf)
+    }
+    for {
+      allFiles <- HoistedUtil.logFailure("allFiles for "+inDir)(allFiles(inDir, f => f.exists() && !f.getName.startsWith(".") && f.getName.toLowerCase != "readme" &&
+        f.getName.toLowerCase != "readme.md"))
+
+      fileInfo <- HoistedUtil.logFailure("File Info for allFiles")(allFiles.map(computeFileInfo(_)))
+
+      ret <- HoistedUtil.logFailure("Reading files")(fileInfo.flatMap(fi =>
+        HoistedUtil.reportFailure("Loading "+fi.pathAndSuffix.display)(ParsedFile(fi, current))))
+
+    } yield ret.filter(_.findData(RemovedKey).isEmpty)
+  }
+
   private var localeMap: Map[String, Box[Locale]] = Map.empty
   private val localeSync = new Object
 
@@ -298,11 +330,23 @@ object DateUtils {
   }
 
 
+  private val cache = new LRUMap[String, Box[DateTime]](15000)
+
+  def uglyParseDate(str: String): Box[DateTime] = synchronized {
+    cache.get(str) match {
+      case Full(x) => x
+      case _ =>
+        val ret = _uglyParseDate(str)
+        cache.update(str, ret)
+        ret
+    }
+  }
+
   @scala.annotation.tailrec
-  def uglyParseDate(str: String): Box[DateTime] = if (str.length < 8) Empty else {
+  private def _uglyParseDate(str: String): Box[DateTime] = if (str.length < 8) Empty else {
     DateUtils.parseDate(str) match {
       case Full(d) => Full(d)
-      case _ => uglyParseDate(str.dropRight(1))
+      case _ => _uglyParseDate(str.dropRight(1))
     }
   }
 

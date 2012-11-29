@@ -67,7 +67,7 @@ object MarkdownParser {
   }
 
   def parse(in: String): Box[(NodeSeq, MetadataValue)] = {
-    val (_in, retPairs) = readTopMetadata(in, true)
+    val (_in, retPairs) = readTopMetadata(in.replace("\r\n", "\n").replace("\r", "\n"), true)
 
     import eu.henkelmann.actuarius._
 

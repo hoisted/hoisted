@@ -32,15 +32,18 @@ class EnvironmentManager() extends LazyLoggableWithImplicitLogger with Factory {
   private val startTime = Helpers.millis
   private var _metadata: MetadataValue = NullMetadataValue
   var menuEntries: List[MenuEntry] = Nil
-  var pages: List[ParsedFile] = Nil
+  private var knownPages: List[ParsedFile] = Nil
   var allPages: List[ParsedFile] = Nil
 
   def metadata: MetadataValue = _metadata
 
   def blogPosts: List[ParsedFile] = {
-    logger.info("Computing blog posts pages "+pages.length)
     computePosts(pages)
   }
+
+  def pages = knownPages
+
+  def setPages(in: List[ParsedFile]) {knownPages = in}
 
   private var _finalFuncs: List[Box[HoistedTransformMetaData] => Box[HoistedTransformMetaData]] = Nil
 
@@ -405,7 +408,7 @@ class EnvironmentManager() extends LazyLoggableWithImplicitLogger with Factory {
     )
   }
 
-  private var templateDir: Box[File] = Empty
+  var templateDir: Box[File] = Empty
 
   def loadTemplates: (String, List[ParsedFile], Boolean) => Box[List[ParsedFile]] = (url, cur, forceMerge) => {
 
@@ -417,7 +420,7 @@ class EnvironmentManager() extends LazyLoggableWithImplicitLogger with Factory {
             addToPostRun(() => HoistedUtil.deleteAll(dir))
 
             loadRepoIntoDir(url, dir).map(ignore => {templateDir = Full(dir); dir})})
-      parsedFiles <- HoistedUtil.reportFailure("Loading files from templates cloned from " + url)(this.loadFilesFrom(theDir, Map.empty))
+      parsedFiles <- HoistedUtil.reportFailure("Loading files from templates cloned from " + url)(HoistedUtil.loadFilesFrom(theDir, Map.empty))
     } yield mergeTemplateSets(cur, parsedFiles, forceMerge)
   }
 
@@ -580,13 +583,18 @@ class EnvironmentManager() extends LazyLoggableWithImplicitLogger with Factory {
       CondTransform(computeArticleDirectories.map(path =>
         SetValueOnTestTransform(ArticleKey, BooleanMetadataValue(true),
           TestPathStartsWith(path)))) ::
-      CondTransform((computePostDirectories ::: computeArticleDirectories ::: computeEventDirectories).map(path => RemovePathPrefixPathTransform(List(path)))) ::
+      CondTransform((computePostDirectories :::
+        computeArticleDirectories :::
+        computeEventDirectories).map(path => RemovePathPrefixPathTransform(List(path)))) ::
       DateFromPathTransform ::
       UpdatePathRootTransform ::
     Nil
 
   private def _transformFile: ParsedFile => ParsedFile =
-  pf => mdXFormRules.foldLeft(pf){(file, func) => func.apply(file)}
+  pf => {
+    val ret = mdXFormRules.foldLeft(pf){(file, func) => func.apply(file)}
+    ret
+  }
 
   def insureHtmlSuffix: String => String = str => multiSlash.replaceAllIn( (str.trim.toLowerCase match {
     case s if s.endsWith(".html")  => s
@@ -730,42 +738,6 @@ class EnvironmentManager() extends LazyLoggableWithImplicitLogger with Factory {
     }} else Nil
 
     synt404 ::: bpSynt ::: Nil
-  }
-
-
-  def allFiles(dir: File, filter: File => Boolean): List[File] = {
-    if (!filter(dir)) Nil
-    else if (dir.isDirectory()) {
-      dir.listFiles().toList.flatMap(allFiles(_, filter))
-    } else if (dir.isFile() && !dir.getName.startsWith(".")) List(dir)
-    else Nil
-  }
-
-
-  var loadFilesFrom: (File, Map[PathAndSuffix, ParsedFile])  => Box[List[ParsedFile]] = _loadFilesFrom
-
-  def _loadFilesFrom(inDir: File, current: Map[PathAndSuffix, ParsedFile]): Box[List[ParsedFile]] = {
-    def computeFileInfo(f: File): FileInfo = {
-      val cp: String = f.getAbsolutePath().substring(inDir.getAbsolutePath.length)
-      val pureName = f.getName
-      val dp = pureName.lastIndexOf(".")
-      val (name, suf) = if (dp <= 0) (pureName, None)
-      else if (pureName.toLowerCase.endsWith(".cms.xml"))
-        (pureName.substring(0, pureName.length - 8), Some("cms.xml"))
-      else (pureName.substring(0, dp),
-        Some(pureName.substring(dp + 1)))
-      FileInfo(Full(f), cp, name, pureName, suf)
-    }
-  for {
-    allFiles <- HoistedUtil.logFailure("allFiles for "+inDir)(allFiles(inDir, f => f.exists() && !f.getName.startsWith(".") && f.getName.toLowerCase != "readme" &&
-    f.getName.toLowerCase != "readme.md"))
-
-    fileInfo <- HoistedUtil.logFailure("File Info for allFiles")(allFiles.map(computeFileInfo(_)))
-
-    ret <- HoistedUtil.logFailure("Reading files")(fileInfo.flatMap(fi =>
-      HoistedUtil.reportFailure("Loading "+fi.pathAndSuffix.display)(ParsedFile(fi, current))))
-
-  } yield ret.filter(_.findData(RemovedKey).isEmpty)
   }
 
 

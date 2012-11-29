@@ -17,36 +17,24 @@ package org.hoisted.lib
 * under the License.
 */
 
+
+import org.jboss.netty.channel.ChannelPipeline;
+import org.jboss.netty.channel.ChannelPipelineFactory;
+import org.jboss.netty.handler.codec.http.HttpChunkAggregator;
+import org.jboss.netty.handler.codec.http.HttpRequestDecoder;
+import org.jboss.netty.handler.codec.http.HttpResponseEncoder;
+import org.jboss.netty.handler.stream.ChunkedWriteHandler;
+
 import java.net.InetSocketAddress;
 import java.util.concurrent.Executors;
 
 import org.jboss.netty.bootstrap.ServerBootstrap;
 import org.jboss.netty.channel.socket.nio.NioServerSocketChannelFactory
 import net.liftweb.http.{Req}
-import java.io.File
-import org.jboss.netty.buffer.ChannelBuffer
+
 import org.jboss.netty.channel.ChannelFuture
 import net.liftweb.util.Helpers
-import net.liftweb.common.Box
-;
-
-class HttpStaticFileServer(port: Int) {
-
-  def run(rootDir: File, setup: EnvironmentManager => EnvironmentManager) {
-    // Configure the server.
-    val bootstrap = new ServerBootstrap(
-      new NioServerSocketChannelFactory(
-        Executors.newCachedThreadPool(),
-        Executors.newCachedThreadPool()));
-
-    // Set up the event pipeline factory.
-    bootstrap.setPipelineFactory(new HttpStaticFileServerPipelineFactory(rootDir, setup));
-
-    // Bind and start to accept incoming connections.
-    bootstrap.bind(new InetSocketAddress(port));
-  }
-}
-
+import net.liftweb.common.{Full, Empty, Box}
 
 import org.jboss.netty.buffer.ChannelBuffers;
 import org.jboss.netty.channel.ChannelFutureListener;
@@ -72,58 +60,28 @@ import java.util.GregorianCalendar;
 import java.util.Locale;
 import java.util.TimeZone;
 
-import org.jboss.netty.handler.codec.http.HttpHeaders.Names._;
-import org.jboss.netty.handler.codec.http.HttpHeaders._;
-import org.jboss.netty.handler.codec.http.HttpMethod._;
-import org.jboss.netty.handler.codec.http.HttpResponseStatus._;
-import org.jboss.netty.handler.codec.http.HttpVersion._;
+import org.jboss.netty.handler.codec.http.HttpHeaders.Names._
+import org.jboss.netty.handler.codec.http.HttpHeaders._
+import org.jboss.netty.handler.codec.http.HttpMethod._
+import org.jboss.netty.handler.codec.http.HttpResponseStatus._
+import org.jboss.netty.handler.codec.http.HttpVersion._
 
-/**
- * A simple handler that serves incoming HTTP requests to send their respective
- * HTTP responses.  It also implements {@code 'If-Modified-Since'} header to
- * take advantage of browser cache, as described in
- * <a href="http://tools.ietf.org/html/rfc2616#section-14.25">RFC 2616</a>.
- *
- * <h3>How Browser Caching Works</h3>
- *
- * Web browser caching works with HTTP headers as illustrated by the following
- * sample:
- * <ol>
- * <li>Request #1 returns the content of <code>/file1.txt</code>.</li>
- * <li>Contents of <code>/file1.txt</code> is cached by the browser.</li>
- * <li>Request #2 for <code>/file1.txt</code> does return the contents of the
- * file again. Rather, a 304 Not Modified is returned. This tells the
- * browser to use the contents stored in its cache.</li>
- * <li>The server knows the file has not been modified because the
- * <code>If-Modified-Since</code> date is the same as the file's last
- * modified date.</li>
- * </ol>
- *
- * <pre>
- * Request #1 Headers
- * ===================
- * GET /file1.txt HTTP/1.1
- *
- * Response #1 Headers
- * ===================
- * HTTP/1.1 200 OK
- * Date:               Tue, 01 Mar 2011 22:44:26 GMT
- * Last-Modified:      Wed, 30 Jun 2010 21:36:48 GMT
- * Expires:            Tue, 01 Mar 2012 22:44:26 GMT
- * Cache-Control:      private, max-age=31536000
- *
- * Request #2 Headers
- * ===================
- * GET /file1.txt HTTP/1.1
- * If-Modified-Since:  Wed, 30 Jun 2010 21:36:48 GMT
- *
- * Response #2 Headers
- * ===================
- * HTTP/1.1 304 Not Modified
- * Date:               Tue, 01 Mar 2011 22:44:28 GMT
- *
- * </pre>
- */
+class HttpStaticFileServer(port: Int) {
+
+  def run(rootDir: File, setup: EnvironmentManager => EnvironmentManager) {
+    // Configure the server.
+    val bootstrap = new ServerBootstrap(
+      new NioServerSocketChannelFactory(
+        Executors.newCachedThreadPool(),
+        Executors.newCachedThreadPool()));
+
+    // Set up the event pipeline factory.
+    bootstrap.setPipelineFactory(new HttpStaticFileServerPipelineFactory(rootDir, setup));
+
+    // Bind and start to accept incoming connections.
+    bootstrap.bind(new InetSocketAddress(port));
+  }
+}
 
 
 private[lib] object GlobalCache {
@@ -131,18 +89,19 @@ private[lib] object GlobalCache {
   var filter: ParsedFile => Boolean = null
   var pipeline: Box[List[ParsedFile]] => Box[List[ParsedFile]] = null
 
-  var curPages: Map[PathAndSuffix, ParsedFile] = Map.empty
+  var curPages: Map[String, ParsedFile] = Map.empty
+
+  var templateDir: Box[File] = Empty
 }
 
 class HttpStaticFileServerHandler(rootDir: File, setup: EnvironmentManager => EnvironmentManager) extends SimpleChannelUpstreamHandler with
-LazyLoggableWithImplicitLogger{
+LazyLoggableWithImplicitLogger {
 
   def HTTP_DATE_FORMAT = "EEE, dd MMM yyyy HH:mm:ss zzz";
 
   def HTTP_DATE_GMT_TIMEZONE = "GMT";
 
   def HTTP_CACHE_SECONDS = 60;
-
 
 
   override def messageReceived(ctx: ChannelHandlerContext, e: MessageEvent): Unit = GlobalCache.synchronized {
@@ -152,84 +111,81 @@ LazyLoggableWithImplicitLogger{
       return;
     }
 
-    val path = request.getUri;
+    val path = request.getUri.toLowerCase;
     if (path == null) {
       sendError(ctx, FORBIDDEN);
       return;
     }
 
-    if (GlobalCache.pipeline eq null) GlobalCache.pipeline =   RenderPipeline.buildPreloaded(loadExternalSites = false,
+    if (GlobalCache.pipeline eq null) GlobalCache.pipeline = RenderPipeline.buildPreloaded(loadExternalSites = false,
       filterPages = x => GlobalCache.filter(x))
 
     val em = setup(new EnvironmentManager)
 
-    Helpers.logTime("Whole render") {
-    HoistedEnvironmentManager.doWith(em) {
+    em.templateDir = GlobalCache.templateDir
 
-      val files =  Helpers.logTime("Loading files") {
-        LoadFiles(PathAndSuffix.onlyCurrent(GlobalCache.curPages)).apply(rootDir)
+    Helpers.logTime("Render for " + path) {
+      HoistedEnvironmentManager.doWith(em) {
+
+        val _files =
+          LoadFiles(PathAndSuffix.onlyCurrent(GlobalCache.curPages)).apply(rootDir)
+
+        _files.foreach(f => GlobalCache.curPages = PathAndSuffix.buildMap(f))
+
+        val files = GlobalCache.templateDir match {
+          case Full(file) => _files.map(f => HoistedUtil.loadFilesFrom(file, Map.empty).toList.flatten ::: f)
+          case _ => _files
+        }
+
+        val parsePath = Req.parsePath(path)
+
+        def testPath(pf: ParsedFile): Boolean = {
+          val ret =
+            pf.fileInfo.pathAndSuffix.path == parsePath.partPath ||
+              pf.fileInfo.pathAndSuffix.display == parsePath.wholePath.mkString("/", "/", "")
+          ret
+
+        }
+
+        GlobalCache.filter = testPath(_)
+
+        val filtered = files.toList.flatten.filter(testPath(_)).filter {
+          case o: HasHtml => false
+          case x => true
+        }
+
+
+        val pages =
+          if (filtered.isEmpty) (GlobalCache.pipeline(files) openOr Nil)
+          else {
+            filtered
+          }
+
+        val show = pages.filter(testPath(_)).headOption
+
+        em.templateDir.foreach(d => GlobalCache.templateDir = Full(d))
+
+        (show, show.flatMap(_.bytes)) match {
+          case (None, _) => sendError(ctx, NOT_FOUND);
+          case (_, None) => sendError(ctx, NOT_FOUND);
+          case (Some(file), Some(bytes)) =>
+
+            val response = new DefaultHttpResponse(HTTP_1_1, OK);
+            setContentLength(response, bytes.length);
+
+            val ch = e.getChannel();
+
+            // Write the initial line and the header.
+            ch.write(response);
+            val cb = ChannelBuffers.copiedBuffer(bytes)
+            val fut = ch.write(cb)
+            fut.addListener(new ChannelFutureListener {
+              def operationComplete(future: ChannelFuture) {
+
+              }
+            })
+        }
       }
-
-      files.foreach(f => GlobalCache.curPages = PathAndSuffix.buildMap(f))
-
-      val parsePath = Req.parsePath(path)
-
-      def testPath(pf: ParsedFile): Boolean = {
-        val ret =
-          pf.fileInfo.pathAndSuffix.path == parsePath.partPath ||
-            pf.fileInfo.pathAndSuffix.display == parsePath.wholePath.mkString("/", "/", "")
-
-        if (ret) logger.info("Testing " + pf.fileInfo.pathAndSuffix.path + " against " + parsePath + " res " + ret)
-        ret
-
-      }
-
-      GlobalCache.filter = testPath(_)
-
-      val filtered = files.toList.flatten.filter(testPath(_)).filter{
-        case o: HasHtml =>
-          logger.info("Oh crap, Mr. Yak "+o.getClass.getName)
-          false
-        case x => true
-      }
-
-      logger.info("Filtered len is "+filtered.length)
-
-
-      val pages =
-      Helpers.logTime("Running render") {
-        if (filtered.isEmpty) (GlobalCache.pipeline(files) openOr Nil) else {
-        logger.info("Yay... no rendering")
-        filtered
-      }
-      }
-      val show = pages.filter(testPath(_)).headOption
-
-
-      (show, show.flatMap(_.bytes)) match {
-        case (None, _) => sendError(ctx, NOT_FOUND);
-        case (_, None) => sendError(ctx, NOT_FOUND);
-        case (Some(file), Some(bytes)) =>
-
-          val response = new DefaultHttpResponse(HTTP_1_1, OK);
-          setContentLength(response, bytes.length);
-
-          logger.info("Writing " + bytes.length + " bytes ")
-
-          val ch = e.getChannel();
-
-          // Write the initial line and the header.
-          ch.write(response);
-          val cb = ChannelBuffers.copiedBuffer(bytes)
-          val fut = ch.write(cb)
-          logger.info("Wrote")
-          fut.addListener(new ChannelFutureListener {
-            def operationComplete(future: ChannelFuture) {
-              logger.info("It's done")
-            }
-          })
-      }
-    }
     }
   }
 
@@ -355,29 +311,6 @@ LazyLoggableWithImplicitLogger{
   }
 
 }
-
-/*
- * Copyright 2012 The Netty Project
- *
- * The Netty Project licenses this file to you under the Apache License,
- * version 2.0 (the "License"); you may not use this file except in compliance
- * with the License. You may obtain a copy of the License at:
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
-* WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
-* License for the specific language governing permissions and limitations
-* under the License.
-*/
-
-import org.jboss.netty.channel.ChannelPipeline;
-import org.jboss.netty.channel.ChannelPipelineFactory;
-import org.jboss.netty.handler.codec.http.HttpChunkAggregator;
-import org.jboss.netty.handler.codec.http.HttpRequestDecoder;
-import org.jboss.netty.handler.codec.http.HttpResponseEncoder;
-import org.jboss.netty.handler.stream.ChunkedWriteHandler;
 
 class HttpStaticFileServerPipelineFactory(rootDir: File,
                                           setup: EnvironmentManager => EnvironmentManager) extends ChannelPipelineFactory {
