@@ -93,8 +93,6 @@ class TelegramRunner extends Function0[AnyRef] {
       em
     }
 
-    println("Running and server mode is "+serverMode+" dir "+rootDir)
-
     if (serverMode) {
       val server = new HttpStaticFileServer(8080)
       server.run(new File(rootDir), emSetup(_))

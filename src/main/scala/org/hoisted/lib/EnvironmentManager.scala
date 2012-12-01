@@ -410,18 +410,21 @@ class EnvironmentManager() extends LazyLoggableWithImplicitLogger with Factory {
 
   var templateDir: Box[File] = Empty
 
-  def loadTemplates: (String, List[ParsedFile], Boolean) => Box[List[ParsedFile]] = (url, cur, forceMerge) => {
-
+  def loadTemplates: (String, List[ParsedFile], Boolean, Boolean) => Box[List[ParsedFile]] = (url, cur, forceMerge, useCached) => {
     for {
       theDir <- HoistedUtil.reportFailure("Trying to load resource " + url)(
-        templateDir or
-          {
-            val dir = File.createTempFile("telegram_", "_template")
-            addToPostRun(() => HoistedUtil.deleteAll(dir))
+        templateDir.filter(_ => useCached) or {
+          val dir = File.createTempFile("telegram_", "_template")
+          addToPostRun(() => HoistedUtil.deleteAll(dir))
 
-            loadRepoIntoDir(url, dir).map(ignore => {templateDir = Full(dir); dir})})
+          loadRepoIntoDir(url, dir).map(ignore => {
+            if (useCached) templateDir = Full(dir); dir
+          })
+        })
       parsedFiles <- HoistedUtil.reportFailure("Loading files from templates cloned from " + url)(HoistedUtil.loadFilesFrom(theDir, Map.empty))
-    } yield mergeTemplateSets(cur, parsedFiles, forceMerge)
+    } yield {
+      mergeTemplateSets(cur, parsedFiles, forceMerge)
+    }
   }
 
   def setMetadata(key: MetadataKey, value: MetadataValue) {

@@ -74,7 +74,6 @@ object Hoist extends LazyLoggableWithImplicitLogger {
     def doIt(runner: Box[TelegramRunner], rest: List[String], toDo: List[String]): (Box[TelegramRunner], List[String]) = toDo match {
       case Nil => runner -> rest
       case "-server" :: dir :: _ =>
-        println("In server mode")
         val r = theRunner(runner)
         r.serverMode = true
         r.rootDir = dir

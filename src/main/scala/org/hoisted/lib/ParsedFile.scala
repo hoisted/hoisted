@@ -63,7 +63,9 @@ object ParsedFile extends LazyLoggableWithImplicitLogger {
           (str2, info) = MarkdownParser.readTopMetadata(str, false)
            html <- parseHtml5File(str2)
           _ <- HoistedUtil.logFailure("Closing "+realFile)(fis.close())
-        } yield HtmlFile(fi, html, info)
+        } yield {
+          HtmlFile(fi, html, info)
+        }
 
       case Some("md") | Some("mkd") =>
         for {
@@ -72,7 +74,9 @@ object ParsedFile extends LazyLoggableWithImplicitLogger {
           str = new String(whole, "UTF-8")
           (elems, rawMeta) <- MarkdownParser.parse(str)
 
-        } yield MarkdownFile(fi, elems, rawMeta)
+        } yield {
+          MarkdownFile(fi, elems, rawMeta)
+        }
 
       case Some("doc") | Some("docx") | Some("rtf") | Some("pages") =>
         (for {

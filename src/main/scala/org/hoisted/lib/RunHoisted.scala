@@ -63,7 +63,7 @@ trait LoadExternal extends LazyLoggableWithImplicitLogger with TheEnv {
         (HoistedUtil.reportFailure("Trying to fetch external resource for " + k)(for {
           url <- k.findString(UrlKey) ?~ ("Failed to get URL for external link in " + k)
 
-          first_prime <- env.loadTemplates(url, Nil, false)
+          first_prime <- env.loadTemplates(url, Nil, false, false)
           first = dedupNames(cur, first_prime)
           xform = env.metadataTransformRules ::: Transformer.listFromMetadata(k)
           tests = TransformTest.fromMetadata(k)
@@ -74,7 +74,7 @@ trait LoadExternal extends LazyLoggableWithImplicitLogger with TheEnv {
       case md =>
         (HoistedUtil.reportFailure("Trying to fetch external resource for " + md)(for {
           url <- md.asString ?~ ("Couldn't turn " + md + " into a URL")
-          first_prime <- env.loadTemplates(url, Nil, true)
+          first_prime <- env.loadTemplates(url, Nil, true, false)
           first = dedupNames(cur, first_prime)
           xform = env.metadataTransformRules
           xformed = first.map(f => xform.foldLeft(f)((pf, func) => func(pf)))
@@ -163,7 +163,7 @@ trait HoistedRenderer extends LazyLoggableWithImplicitLogger with PluginRunner w
                 }).map(_.getMillis).filter(_ > start).sorted.headOption
 
 
-                HoistedTransformMetaData(new String(log.toByteArray), aliases, when /*, transformedFiles, env.metadata, env, aliases*/)
+                HoistedTransformMetaData(new String(log.toByteArray), aliases, when getOrElse 0L)
               }
 
               environment.finalFuncs.foldLeft(r22)((res, f) => f(res))
@@ -281,18 +281,20 @@ trait FileListDiffer {
 
 }
 
-final case class HoistedTransformMetaData(logs: String, aliases: List[Alias], nextRenderDate: Option[Long])
+final case class HoistedTransformMetaData(logs: String, aliases: List[Alias], nextRenderDate: Long)
 
 case class LoadFiles(current: Map[String, ParsedFile]) extends Function1[File, Box[List[ParsedFile]]] with LazyLoggableWithImplicitLogger {
   def apply(dir: File): Box[List[ParsedFile]] =
     HoistedUtil.reportFailure("Loading files from " + dir)(HoistedUtil.loadFilesFrom(dir, current))
 }
 
-case class RemoveRemoved() extends Function1[Box[List[ParsedFile]], Box[List[ParsedFile]]] with TheEnv {
+case class RemoveRemoved(phase: String) extends Function1[Box[List[ParsedFile]], Box[List[ParsedFile]]] with TheEnv {
   def apply(in: Box[List[ParsedFile]]): Box[List[ParsedFile]] = {
     for {
       files <- in
-    } yield env.removeRemoved(files)
+    } yield {
+      env.removeRemoved(files)
+    }
   }
 }
 
@@ -521,10 +523,10 @@ case class FilterValid() extends ThingTemplate {
 
 case class EnsureTemplates() extends ThingTemplate {
   def doThing = in =>
-      if (env.needsTemplates(in)) {
-        val name = env.computeTemplateURL()
-        env.loadTemplates(name, in, false)
-      } else Full(in)
+    if (env.needsTemplates(in)) {
+      val name = env.computeTemplateURL()
+      env.loadTemplates(name, in, false, true)
+    } else Full(in)
 }
 
 case class TestAndSetBlogKey() extends ThingTemplate {
@@ -595,9 +597,10 @@ object RenderPipeline {
 
   def buildPreloaded(loadExternalSites: Boolean = true,
                      filterPages: ParsedFile => Boolean = ignore => true):
-  Box[List[ParsedFile]] => Box[List[ParsedFile]] = RemoveRemoved() andThen DoMetaMagicAndSuch(loadExternalSites) andThen RemoveRemoved() andThen
-    DoInitialTemplating(filterPages) andThen RemoveRemoved() andThen UpdateHeaderMetaData() andThen
-    RemoveRemoved() andThen FilterValid() andThen EnsureTemplates() andThen
+  Box[List[ParsedFile]] => Box[List[ParsedFile]] = RemoveRemoved("First") andThen DoMetaMagicAndSuch(loadExternalSites) andThen
+    RemoveRemoved("Before initial templating") andThen
+    DoInitialTemplating(filterPages) andThen RemoveRemoved("Before update header metadata") andThen UpdateHeaderMetaData() andThen
+    RemoveRemoved("Before filtervalid") andThen FilterValid() andThen EnsureTemplates() andThen
     TestAndSetBlogKey() andThen FilterBasedOnMetadata() andThen
     DoFinalRender(filterPages)
 
