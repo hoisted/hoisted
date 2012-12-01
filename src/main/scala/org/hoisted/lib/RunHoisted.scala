@@ -570,7 +570,6 @@ case class DoMetaMagicAndSuch(fetchExternalSites: Boolean) extends Function1[Box
      * @return
      */
     def doMetadataMagicAndSuch(_in: List[ParsedFile]): List[ParsedFile] = {
-      env.clearMetadata()
       _in.foreach(pf => env.updateGlobalMetadata(pf.metaData))
 
       val in2 =_in.map(env.transformFile)

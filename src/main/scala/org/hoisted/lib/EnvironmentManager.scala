@@ -508,14 +508,7 @@ class EnvironmentManager() extends LazyLoggableWithImplicitLogger with Factory {
       case x: ParsedFile with HasHtml if shouldWriteFile(x) => x
     }
 
-
   var updateGlobalMetadata: MetadataValue => Unit = _updateGlobalMetadata
-
-  var clearMetadata: () => Unit = _clearMetadata _
-
-  def _clearMetadata() {
-    _metadata = NullMetadataValue
-  }
 
   def _updateGlobalMetadata: MetadataValue => Unit = md => {
     md match {
