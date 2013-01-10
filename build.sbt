@@ -27,10 +27,10 @@ resolvers += "Java.net Maven2 Repository" at "http://download.java.net/maven/2/"
 
 version := "0.1-SNAPSHOT"
 
-// crossScalaVersions in ThisBuild    := Seq("2.9.2") // "2.9.1-1", "2.9.1", "2.9.0-1", "2.9.0")
+crossScalaVersions in ThisBuild    := Seq("2.9.2", "2.10.0") // "2.9.1-1", "2.9.1", "2.9.0-1", "2.9.0")
 
 libraryDependencies ++= {
-  val liftVersion = "2.5-M3"
+  val liftVersion = "2.5-SNAPSHOT"
   Seq(
     "net.liftweb" %% "lift-webkit" % liftVersion % "compile",
     "net.liftweb" %% "lift-json-ext" % liftVersion % "compile")
@@ -44,7 +44,7 @@ libraryDependencies ++= {
     "ch.qos.logback" % "logback-classic" % "1.0.6" % "compile" ,
     // "org.pegdown" %  "pegdown" % "1.2.0",
     // "com.tristanhunt" %% "knockoff" % "0.8.1" ,
-    "eu.henkelmann" %% "actuarius" % "0.2.4",
+    "org.hoisted" %% "actuarius" % "0.2.5",
     "org.eclipse.jgit" % "org.eclipse.jgit" % "1.3.0.201202151440-r",
     // "org.mortbay.jetty" % "jetty" % "6.1.22" % "test",
     "io.netty" % "netty" % "3.5.10.Final",
