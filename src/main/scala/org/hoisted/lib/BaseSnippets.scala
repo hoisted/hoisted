@@ -189,8 +189,8 @@ object BaseSnippets extends LazyLoggableWithImplicitLogger {
       tpe <- S.attr("type").toList
       max = S.attr("max").flatMap(asInt).filter(_ > 0) openOr 10
       rec <- env.findByTag("sub", Full(tpe)).take(max)
-      val title = rec.findData(MetadataKey("sub")).flatMap(_.asNodeSeq) openOr Text("Happening")
-      val desc = rec.findData(MetadataKey("desc")).flatMap(_.asNodeSeq)
+      title = rec.findData(MetadataKey("sub")).flatMap(_.asNodeSeq) openOr Text("Happening")
+      desc = rec.findData(MetadataKey("desc")).flatMap(_.asNodeSeq)
     } yield (rec, title, desc)
 
     if ((in \\ "title").filter{

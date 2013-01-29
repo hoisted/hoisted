@@ -337,7 +337,7 @@ trait Templater extends TheEnv with LazyLoggableWithImplicitLogger {
   def runTemplater(_f: ParsedFile, templates: TemplateLookup, ignoreTemplateFailure: Boolean,
                    snippets: PartialFunction[(String, String), Box[NodeSeq => NodeSeq]]): ParsedFile = {
     _f match {
-      case f: ParsedFile with HasHtml if testFunc(f) && HoistedEnvironmentManager.value.isHtml(f) =>
+      case f: ParsedFile with HasHtml if !env.excludeFile(f) && testFunc(f) && HoistedEnvironmentManager.value.isHtml(f) =>
         val lu = new PartialFunction[(Locale, List[String]), Box[NodeSeq]] {
           def isDefinedAt(in: (Locale, List[String])): Boolean = {
 

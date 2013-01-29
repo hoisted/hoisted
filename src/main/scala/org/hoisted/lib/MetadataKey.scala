@@ -45,6 +45,14 @@ abstract class MetadataKey {
   })
 }
 
+case object ExcludeDirectoryFromRendering extends MetadataKey {
+  def global = true
+
+  def key = "exclude_dir_from_rendering"
+
+  override def alt: List[String] = List("exclude-dir-from-rendering")
+}
+
 case object DefaultTemplateKey extends MetadataKey {
   def global = false
 
@@ -590,6 +598,7 @@ object MetadataKey extends LazyLoggableWithImplicitLogger {
     RemovedKey, UpdatePathRootXFormKey, RemovePathPrefixXFormKey,
     FileSuffixTestKey, GlobalXFormKey, GlobalLocaleKey, GlobalTimeZoneKey,
     PrependPathXFormKey, DateFromPathXFormKey, SetValueXFormKey,
+    ExcludeDirectoryFromRendering,
     ShowIfKey, HideIfKey, DateFormatKey, MenuDividerKey, EventRootKey, ArticleRootKey)
 
   def apply(s: String): MetadataKey = {

@@ -35,16 +35,16 @@ object YamlUtil extends LazyLoggableWithImplicitLogger {
   def parse(incoming: String): Box[MetadataValue] = {
     val yaml = new Yaml(new FilterConstructor)
 
-    def objToMetadata(in: Object): MetadataValue = {
+    def objToMetadata(in: Any): MetadataValue = {
 
       (in: @scala.unchecked) match {
-        case jm: JMap[Object, Object] => KeyedMetadataValue(jm.toList.map{ case (key, value) => (MetadataKey(key.toString), objToMetadata(value))})
-        case jl: JList[Object] => ListMetadataValue(jl.toList.map(objToMetadata _))
+        case jm: JMap[_, _] => KeyedMetadataValue(jm.toList.map{ case (key, value) => (MetadataKey(key.toString), objToMetadata(value))})
+        case jl: JList[_] => ListMetadataValue(jl.toList.map(objToMetadata _))
         case s: String => StringMetadataValue(s)
         case d: java.lang.Double => DoubleMetadataValue(d)
         case i: java.lang.Integer => IntMetadataValue(i)
         case d: java.util.Date => DateTimeMetadataValue(new DateTime(d.getTime))
-        case it: java.lang.Iterable[Object] => ListMetadataValue(it.toList.map(objToMetadata _))
+        case it: java.lang.Iterable[_] => ListMetadataValue(it.toList.map(objToMetadata _))
         case b: java.lang.Boolean => BooleanMetadataValue(b)
         case n: java.lang.Number => DoubleMetadataValue(n.doubleValue())
         case x => StringMetadataValue(x.toString)
