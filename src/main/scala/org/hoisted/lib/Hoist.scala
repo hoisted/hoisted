@@ -23,29 +23,30 @@ object Hoist extends LazyLoggableWithImplicitLogger {
     val em = new EnvironmentManager()
 
     HoistedEnvironmentManager.doWith(em) {
-    val info = slurpParams(args.toList)
+      val info = slurpParams(args.toList)
 
-    info.classInfo match {
-      case Full((cl, clz)) =>
-        val toRun = clz.filter(s => s == "Boot" || s.endsWith(".Boot"))
-        for {
-          clzName <- toRun
-          theClz <- Helpers.tryo(Nil)(cl.loadClass(clzName).asInstanceOf[Class[AnyRef]])
-          inst1 <- Helpers.tryo(Nil)(theClz.newInstance)
-          inst <- Full(inst1).asA[Function0[AnyRef]]
-        } logger.info("Booting "+clzName+" res "+inst.apply())
+      info.classInfo match {
+        case Full((cl, clz)) =>
+          val toRun = clz.filter(s => s == "Boot" || s.endsWith(".Boot"))
+          for {
+            clzName <- toRun
+            theClz <- Helpers.tryo(Nil)(cl.loadClass(clzName).asInstanceOf[Class[AnyRef]])
+            inst1 <- Helpers.tryo(Nil)(theClz.newInstance)
+            inst <- Full(inst1).asA[Function0[AnyRef]]
+          } logger.info("Booting " + clzName + " res " + inst.apply())
 
-      case x =>
-    }
+        case x =>
+      }
 
-    info match {
-      case Info(_, _, f: Failure) =>
-        logger.error("Failed to compile code "+f.msg); sys.exit(127)
-      case Info(Full(from), Full(to), _) =>
-        RunHoisted(new File(from), new File(to), HoistedEnvironmentManager.value)
+      info match {
+        case Info(_, _, f: Failure) =>
+          logger.error("Failed to compile code " + f.msg); sys.exit(127)
+        case Info(Full(from), Full(to), _) =>
+          logger.info("Running hoisted with "+em.metadata)
+          RunHoisted(new File(from), new File(to), HoistedEnvironmentManager.value)
 
-      case _ => logger.error("Usage 'java -jar hoisted.jar source_directory destination_directory"); sys.exit(127)
-    }
+        case _ => logger.error("Usage 'java -jar hoisted.jar source_directory destination_directory"); sys.exit(127)
+      }
     }
   }
 

@@ -8,7 +8,7 @@ package org.hoisted.lib
  * To change this template use File | Settings | File Templates.
  */
 
-class TelegramRunner extends Function0[AnyRef] {
+class TelegramRunner extends Function0[AnyRef] with LazyLoggableWithImplicitLogger {
   import net.liftweb._
   import util._
   import java.io._
@@ -79,17 +79,19 @@ class TelegramRunner extends Function0[AnyRef] {
   def apply(): AnyRef = {
 
     def emSetup(em: EnvironmentManager): EnvironmentManager = {
-    em.setMetadata(SiteLinkKey, theSiteUrl)
+      em.setMetadata(SiteLinkKey, StringMetadataValue(theSiteUrl))
+
+      logger.info("Set the "+SiteLinkKey+" to "+theSiteUrl)
 
       if (!serverMode) {
         em.externRepoLoader = Full(myRepoLoader)
       }
 
-    em.runWrapper = new CommonLoanWrapper() {
-      def apply[T](f: => T): T =
-        DateUtils.CurrentLocale.doWith(new Locale(theLocale))(
-          DateUtils.CurrentTimeZone.doWith(DateTimeZone.forID(theTimeZone))(f))
-    }
+      em.runWrapper = new CommonLoanWrapper() {
+        def apply[T](f: => T): T =
+          DateUtils.CurrentLocale.doWith(new Locale(theLocale))(
+            DateUtils.CurrentTimeZone.doWith(DateTimeZone.forID(theTimeZone))(f))
+      }
       em
     }
 

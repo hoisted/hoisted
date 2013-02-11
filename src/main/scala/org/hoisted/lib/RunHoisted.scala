@@ -126,6 +126,7 @@ trait HoistedRenderer extends LazyLoggableWithImplicitLogger with PluginRunner w
     environment.runWrapper {
       val special = environment.additionalKeys.flatMap(k => (k.key :: k.alt).map(_.trim.toLowerCase).map(_ -> k)).
         foldLeft(MetadataKey.special)(_ + _)
+
       MetadataKey.localSpecial.doWith(special) {
         if ((null eq _inDir) || !_inDir.exists()) Failure("No valid source directory " + _inDir)
         else {
@@ -570,10 +571,10 @@ case class DoMetaMagicAndSuch(fetchExternalSites: Boolean) extends Function1[Box
      * @return
      */
     def doMetadataMagicAndSuch(_in: List[ParsedFile]): List[ParsedFile] = {
-      env.clearMetadata()
+      //env.clearMetadata()
       _in.foreach(pf => env.updateGlobalMetadata(pf.metaData))
 
-      val in2 =_in.map(env.transformFile)
+      val in2 = _in.map(env.transformFile)
 
       val in = runPluginsPhase1(in2)
 
@@ -582,14 +583,14 @@ case class DoMetaMagicAndSuch(fetchExternalSites: Boolean) extends Function1[Box
           case Full(ListMetadataValue(lst)) if fetchExternalSites => lst.foldLeft(in)(loadExternal)
           case Full(md) if fetchExternalSites => loadExternal(in, md)
           case _ => in
-      }
+        }
 
       withLoadedTemplates
     }
 
-      for {
-        theFiles <- in
-      } yield doMetadataMagicAndSuch(theFiles)
+    for {
+      theFiles <- in
+    } yield doMetadataMagicAndSuch(theFiles)
   }
 }
 

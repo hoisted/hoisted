@@ -3,7 +3,7 @@ import AssemblyKeys._ // put this at the top of the file
 //Project Information
 name := "Hoisted"
 
-scalaVersion := "2.9.2"
+scalaVersion := "2.10.0"
 
 scalacOptions += "-deprecation"
 
@@ -30,7 +30,7 @@ version := "0.1-SNAPSHOT"
 crossScalaVersions in ThisBuild    := Seq("2.9.2", "2.10.0") // "2.9.1-1", "2.9.1", "2.9.0-1", "2.9.0")
 
 libraryDependencies ++= {
-  val liftVersion = "2.5-M4"
+  val liftVersion = "2.5-SNAPSHOT"
   Seq(
     "net.liftweb" %% "lift-webkit" % liftVersion % "compile",
     "net.liftweb" %% "lift-json-ext" % liftVersion % "compile")

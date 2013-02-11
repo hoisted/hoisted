@@ -29,6 +29,7 @@ trait HoistedPhase {
 final case class PostRenderPhase(location: File, environment: EnvironmentManager) extends HoistedPhase
 
 class EnvironmentManager() extends LazyLoggableWithImplicitLogger with Factory {
+
   private val startTime = Helpers.millis
   private var _metadata: MetadataValue = NullMetadataValue
   var menuEntries: List[MenuEntry] = Nil
@@ -511,11 +512,12 @@ class EnvironmentManager() extends LazyLoggableWithImplicitLogger with Factory {
 
   var updateGlobalMetadata: MetadataValue => Unit = _updateGlobalMetadata
 
+  /*
   var clearMetadata: () => Unit = _clearMetadata _
 
   def _clearMetadata() {
     _metadata = NullMetadataValue
-  }
+  }*/
 
   def _updateGlobalMetadata: MetadataValue => Unit = md => {
     md match {
@@ -767,7 +769,11 @@ class EnvironmentManager() extends LazyLoggableWithImplicitLogger with Factory {
 
   def siteGuid: () => String = () => Helpers.hashHex(siteLink())
 
-  def siteLink: () => String = () => findMetadata(SiteLinkKey).flatMap(_.asString) openOr "http://telegr.am"
+  def siteLink: () => String = () => {
+    val ret = findMetadata(SiteLinkKey).flatMap(_.asString) openOr "http://telegr.am"
+
+    ret
+  }
 
   def siteTitle: () => String = () => findMetadata(SiteNameKey).flatMap(_.asString) openOr "Telegram"
 
