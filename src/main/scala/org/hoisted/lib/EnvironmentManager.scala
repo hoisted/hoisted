@@ -656,6 +656,23 @@ class EnvironmentManager() extends LazyLoggableWithImplicitLogger with Factory {
 
   }
 
+  /**
+   * Exclude the file based on its path?
+   *
+   * @return
+   */
+  def excludeFileInfo(fi: FileInfo): Boolean = {
+    (for {
+      toEx <- findMetadata(ExcludeDirectoryFromRendering)
+      thePath = fi.pathAndSuffix.display.toLowerCase()
+    } yield toEx match {
+        case StringMetadataValue(s) => thePath.startsWith(s.toLowerCase())
+        case ListMetadataValue(lm) => lm.find(md => thePath.startsWith(md.asString.map(_.toLowerCase()) openOr "$$$$###$#$##$#$#$#")).isDefined
+        case _ => false
+      }) openOr false
+
+  }
+
   def isHtml: ParsedFile => Boolean = pf => {
     pf match {
       case hh: HasHtml =>

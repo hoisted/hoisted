@@ -36,25 +36,31 @@ object ParsedFile extends LazyLoggableWithImplicitLogger {
       ret
     }) orElse {
     fi.suffix.map(_.toLowerCase) match {
-      case Some("yaml") =>
+      case Some("yaml") if (!HoistedEnvironmentManager.value.excludeFileInfo(fi)) =>
         for {
           realFile <- fi.file
           fis <- HoistedUtil.logFailure("Trying to open file "+realFile)(new FileInputStream(realFile))
           yaml <- HoistedUtil.logFailure("Trying to parse "+fi.pathAndSuffix.display)(new String(Helpers.readWholeStream(fis), "UTF-8"))
           _ <- HoistedUtil.logFailure("Trying to close stream for file "+realFile)(fis.close())
           metaData <- HoistedUtil.reportFailure("Parsing YAML file "+fi.pathAndSuffix.display)( YamlUtil.parse(yaml))
-        } yield YamlFile(fi, metaData)
+        } yield {
+          metaData.find(ExcludeDirectoryFromRendering).foreach(v => HoistedEnvironmentManager.value.setMetadata(ExcludeDirectoryFromRendering, v))
+          YamlFile(fi, metaData)
+        }
 
-      case Some("xhtml") | Some("cms.xml") =>
+      case Some("xhtml") | Some("cms.xml") if (!HoistedEnvironmentManager.value.excludeFileInfo(fi))  =>
         for {
           realFile <- fi.file
           fis <- HoistedUtil.logFailure("Trying to open file "+realFile)(new FileInputStream(realFile))
           xml <- PCDataXmlParser(fis)
           _ <- HoistedUtil.logFailure("Trying to close stream for file "+realFile)(fis.close())
           metaData = findXmlMetaData(xml)
-        } yield XmlFile(fi, findBody(xml), xml, metaData)
+        } yield {
+          metaData.find(ExcludeDirectoryFromRendering).foreach(v => HoistedEnvironmentManager.value.setMetadata(ExcludeDirectoryFromRendering, v))
+          XmlFile(fi, findBody(xml), xml, metaData)
+        }
 
-      case Some("html") | Some("htm") =>
+      case Some("html") | Some("htm") if (!HoistedEnvironmentManager.value.excludeFileInfo(fi))  =>
         for {
           realFile <- fi.file
           fis <- HoistedUtil.logFailure("Trying to open file "+realFile)(new FileInputStream(realFile))
@@ -64,10 +70,11 @@ object ParsedFile extends LazyLoggableWithImplicitLogger {
            html <- parseHtml5File(str2)
           _ <- HoistedUtil.logFailure("Closing "+realFile)(fis.close())
         } yield {
+          info.find(ExcludeDirectoryFromRendering).foreach(v => HoistedEnvironmentManager.value.setMetadata(ExcludeDirectoryFromRendering, v))
           HtmlFile(fi, html, info)
         }
 
-      case Some("md") | Some("mkd") =>
+      case Some("md") | Some("mkd") if (!HoistedEnvironmentManager.value.excludeFileInfo(fi))  =>
         for {
           realFile <- fi.file
           whole <- HoistedUtil.logFailure("Reading "+realFile)(Helpers.readWholeFile(realFile))
@@ -75,10 +82,11 @@ object ParsedFile extends LazyLoggableWithImplicitLogger {
           (elems, rawMeta) <- MarkdownParser.parse(str)
 
         } yield {
+          rawMeta.find(ExcludeDirectoryFromRendering).foreach(v => HoistedEnvironmentManager.value.setMetadata(ExcludeDirectoryFromRendering, v))
           MarkdownFile(fi, elems, rawMeta)
         }
 
-      case Some("doc") | Some("docx") | Some("rtf") | Some("pages") =>
+      case Some("doc") | Some("docx") | Some("rtf") | Some("pages") if (!HoistedEnvironmentManager.value.excludeFileInfo(fi))  =>
         (for {
           realFile <- fi.file
           inputStream <- HoistedUtil.logFailure("Opening "+realFile)(new FileInputStream(realFile))

@@ -121,7 +121,7 @@ object HoistedUtil extends LazyLoggableWithImplicitLogger {
   def allFiles(dir: File, filter: File => Boolean): List[File] = {
     if (!filter(dir)) Nil
     else if (dir.isDirectory()) {
-      dir.listFiles().toList.flatMap(allFiles(_, filter))
+      dir.listFiles().toList.sortWith(_.isDirectory <= _.isDirectory).flatMap(allFiles(_, filter))
     } else if (dir.isFile() && !dir.getName.startsWith(".")) List(dir)
     else Nil
   }
