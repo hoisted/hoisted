@@ -5,7 +5,7 @@
 1. git clone https://github.com/hoisted/hoisted.git
 2. git clone https://github.com/lift/cms_site.git
 3. cd hoisted
-4. ./sbt11 assembly
+4. ./start-sbt assembly
 5. cd ..
 6. mkdir resulting_site
 7. java -jar ./hoisted/target/hoisted.jar cms_site/site/ resulting_site/
