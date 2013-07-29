@@ -75,6 +75,8 @@ mergeStrategy in assembly <<= (mergeStrategy in assembly) { (old) =>
   }
 }
 
+EclipseKeys.withSource := true
+
 publishArtifact in Test := false
 
 pomIncludeRepository := { _ => false }
