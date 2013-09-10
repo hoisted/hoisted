@@ -137,6 +137,8 @@ LazyLoggableWithImplicitLogger {
           case _ => _files
         }
 
+
+
         val parsePath = Req.parsePath(path)
 
         def testPath(pf: ParsedFile): Boolean = {
@@ -149,11 +151,13 @@ LazyLoggableWithImplicitLogger {
 
         GlobalCache.filter = testPath(_)
 
-        val filtered = files.toList.flatten.filter(testPath(_)).filter {
+        val _filtered = files.toList.flatten.filter(testPath(_)).filter {
           case o: HasHtml => false
           case x => true
         }
 
+        val filtered = _filtered.filter(f => f.fileInfo.pathAndSuffix.path == parsePath.partPath &&
+          f.fileInfo.suffix == Some(parsePath.suffix).filter(_.length > 0)).headOption.map(v => List(v)) getOrElse _filtered
 
         val pages =
           if (filtered.isEmpty) (GlobalCache.pipeline(files) openOr Nil)
@@ -172,6 +176,9 @@ LazyLoggableWithImplicitLogger {
 
             val response = new DefaultHttpResponse(HTTP_1_1, OK);
             setContentLength(response, bytes.length);
+            file.fileInfo.file.foreach(f => {
+              setContentTypeHeader(response, f)
+            })
 
             val ch = e.getChannel();
 
@@ -307,7 +314,12 @@ LazyLoggableWithImplicitLogger {
    */
   private def setContentTypeHeader(response: HttpResponse, file: File) {
     val mimeTypesMap = new MimetypesFileTypeMap();
-    response.setHeader(CONTENT_TYPE, mimeTypesMap.getContentType(file.getPath()));
+    if (file.getPath.toLowerCase().endsWith(".css")) {
+      response.setHeader(CONTENT_TYPE, "text/css")
+
+    } else {
+      response.setHeader(CONTENT_TYPE, mimeTypesMap.getContentType(file.getPath()));
+    }
   }
 
 }

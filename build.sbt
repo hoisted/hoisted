@@ -33,6 +33,7 @@ libraryDependencies ++= {
   val liftVersion = "3.0-SNAPSHOT"
   Seq(
     "net.liftweb" %% "lift-webkit" % liftVersion % "compile",
+    "net.liftweb" %% "lift-markdown" % liftVersion % "compile",
     "net.liftweb" %% "lift-json-ext" % liftVersion % "compile")
 }
 
@@ -42,11 +43,7 @@ libraryDependencies ++= {
     "org.yaml" % "snakeyaml" % "1.10",
     "junit" % "junit" % "4.7" % "test",
     "ch.qos.logback" % "logback-classic" % "1.0.6" % "compile" ,
-    // "org.pegdown" %  "pegdown" % "1.2.0",
-    // "com.tristanhunt" %% "knockoff" % "0.8.1" ,
-    "org.hoisted" %% "actuarius" % "0.2.5-SNAPSHOT",
     "org.eclipse.jgit" % "org.eclipse.jgit" % "1.3.0.201202151440-r",
-    // "org.mortbay.jetty" % "jetty" % "6.1.22" % "test",
     "io.netty" % "netty" % "3.5.10.Final",
     "org.scala-tools.testing" %% "specs" % "1.6.9" % "test"
   )

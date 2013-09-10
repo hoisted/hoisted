@@ -66,15 +66,14 @@ object MarkdownParser {
     (_in, p2.foldLeft(pairs2)(_ +&+ _))
   }
 
+  private lazy val markdownTransformer = new net.liftweb.markdown.SingleThreadedTransformer
+
   def parse(in: String): Box[(NodeSeq, MetadataValue)] = {
     val (_in, retPairs) = readTopMetadata(in.replace("\r\n", "\n").replace("\r", "\n"), true)
 
-    import eu.henkelmann.actuarius._
-
-
-    ActuariusApp.synchronized{
+    markdownTransformer.synchronized {
     for {
-      str <- Helpers.tryo(ActuariusApp.apply(_in))
+      str <- Helpers.tryo(markdownTransformer.apply(_in))
       res = HoistedHtml5.parse("<html><head><title>I eat yaks</title></head><body>" + str + "</body></html>")
       info <- res.map {
         res => (res \ "body").collect {
