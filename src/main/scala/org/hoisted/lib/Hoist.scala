@@ -128,7 +128,10 @@ object HoistedUtil extends LazyLoggableWithImplicitLogger {
 
   def loadFilesFrom(inDir: File, current: Map[String, ParsedFile]): Box[List[ParsedFile]] = {
     def computeFileInfo(f: File): FileInfo = {
-      val cp: String = f.getAbsolutePath().substring(inDir.getAbsolutePath.length)
+      val cp: String = (File.separator, f.getAbsolutePath().substring(inDir.getAbsolutePath.length)) match {
+        case ("\\", p) => p.replaceAll("\\\\", "/")
+        case (_, p) => p
+      }
       val pureName = f.getName
       val dp = pureName.lastIndexOf(".")
       val (name, suf) = if (dp <= 0) (pureName, None)

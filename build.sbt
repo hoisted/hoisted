@@ -65,6 +65,15 @@ test in assembly := {}
 
 mainClass in assembly := Some("org.hoisted.lib.Hoist")
 
+mergeStrategy in assembly <<= (mergeStrategy in assembly) { (old) =>
+  { 
+    case x if x startsWith "META-INF\\" => MergeStrategy.discard 
+    case x => old(x)
+  }
+}
+
+EclipseKeys.withSource := true
+
 publishArtifact in Test := false
 
 pomIncludeRepository := { _ => false }
