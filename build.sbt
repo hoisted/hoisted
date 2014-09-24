@@ -3,7 +3,7 @@ import AssemblyKeys._ // put this at the top of the file
 //Project Information
 name := "Hoisted"
 
-scalaVersion := "2.10.0"
+scalaVersion := "2.10.4"
 
 scalacOptions += "-deprecation"
 
@@ -15,22 +15,22 @@ autoCompilerPlugins := true
 
 checksums := Nil
 
-organization := "org.hoisted" 
+organization := "org.hoisted"
 
 // seq(webSettings :_*)
 
-resolvers += "Scala Snapshots" at "https://oss.sonatype.org/content/repositories/snapshots/" 
+// resolvers += "Scala Snapshots" at "https://oss.sonatype.org/content/repositories/snapshots/"
 
 resolvers += "Scala" at "https://oss.sonatype.org/content/groups/scala-tools/"
 
-resolvers += "Java.net Maven2 Repository" at "http://download.java.net/maven/2/"
+// resolvers += "Java.net Maven2 Repository" at "http://download.java.net/maven/2/"
 
-version := "0.1-SNAPSHOT"
+version := "0.2-SNAPSHOT"
 
 // crossScalaVersions in ThisBuild    := Seq("2.9.2", "2.10.0") // "2.9.1-1", "2.9.1", "2.9.0-1", "2.9.0")
 
 libraryDependencies ++= {
-  val liftVersion = "3.0-SNAPSHOT"
+  val liftVersion = "3.0-M1"
   Seq(
     "net.liftweb" %% "lift-webkit" % liftVersion % "compile",
     "net.liftweb" %% "lift-markdown" % liftVersion % "compile",
@@ -89,4 +89,3 @@ pomExtra := (
       <url>http://blog.goodstuff.im</url>
     </developer>
   </developers>)
-
