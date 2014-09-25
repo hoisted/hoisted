@@ -59,8 +59,9 @@ class TelegramRunner extends Function0[AnyRef] with LazyLoggableWithImplicitLogg
       stuff <- Helpers.tryo(Helpers.readWholeStream(contentStream))
       _ <- Helpers.tryo(contentStream.close)
       destDir = s"/data/pulled/${place}"
+      _ = Seq("rm", "-rf", dest.getAbsolutePath).!
       _ = Seq("cp", "-r", destDir, dest.getAbsolutePath).!
-      _ = println(s"Yay... got a repo... and copied it from ${destDir} to ${dest.getAbsolutePath}... ls ${s"ls -l ${destDir}".!}")
+      _ = println(s"Yay... got a repo... and copied it from ${destDir} to ${dest.getAbsolutePath}... ls:\n ${s"ls -l ${destDir}".!!}")
     } yield true
   }
 
