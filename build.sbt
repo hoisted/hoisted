@@ -33,6 +33,7 @@ libraryDependencies ++= {
   val liftVersion = "3.0-M1"
   Seq(
     "net.liftweb" %% "lift-webkit" % liftVersion % "compile",
+    "net.liftweb" %% "lift-common" % liftVersion % "compile",
     "net.liftweb" %% "lift-markdown" % liftVersion % "compile",
     "net.liftweb" %% "lift-json-ext" % liftVersion % "compile")
 }

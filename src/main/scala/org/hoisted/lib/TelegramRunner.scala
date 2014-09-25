@@ -16,6 +16,7 @@ class TelegramRunner extends Function0[AnyRef] with LazyLoggableWithImplicitLogg
   import common._
   import java.util._
   import org.joda.time._
+  import scala.sys.process._
 
   var serverMode = false
   var rootDir: String = ""
@@ -48,14 +49,18 @@ class TelegramRunner extends Function0[AnyRef] with LazyLoggableWithImplicitLogg
    * @return
    */
   private def myRepoLoader(urlStr: String, env: EnvironmentManager, dest: File): Box[Boolean] = {
+    val place = Helpers.nextFuncName
     val url = new URL(rootUrl+"/api/pull_files/"+theGuid+"/"+
-      Helpers.urlEncode(urlStr)+"/"+Helpers.urlEncode(dest.getAbsolutePath))
+      Helpers.urlEncode(urlStr)+"/"+place)
 
     for {
       conn <- Helpers.tryo(url.openConnection())
       contentStream <-Helpers.tryo(conn.getContent).asA[InputStream]
       stuff <- Helpers.tryo(Helpers.readWholeStream(contentStream))
       _ <- Helpers.tryo(contentStream.close)
+      destDir = s"/data/pulled/${place}"
+      _ = Seq("cp", "-r", destDir, dest.getAbsolutePath).!
+      _ = println(s"Yay... got a repo... and copied it from ${destDir} to ${dest.getAbsolutePath}... ls ${s"ls -l ${destDir}".!}")
     } yield true
   }
 
