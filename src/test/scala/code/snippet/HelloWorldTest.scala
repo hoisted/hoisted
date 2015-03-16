@@ -1,16 +1,16 @@
 package code
 package snippet
 
-import org.specs._
-import org.specs.runner.JUnit4
-import org.specs.runner.ConsoleRunner
+import org.specs2.mutable._
+//import org.specs.runner.JUnit4
+//import org.specs.runner.ConsoleRunner
 import scala.xml._
 import java.io.{OutputStreamWriter, ByteArrayOutputStream}
 import org.hoisted.lib.{HoistedHtml5, ParsedFile}
 
 
-class HelloWorldTestSpecsAsTest extends JUnit4(HelloWorldTestSpecs)
-object HelloWorldTestSpecsRunner extends ConsoleRunner(HelloWorldTestSpecs)
+//class HelloWorldTestSpecsAsTest extends JUnit4(HelloWorldTestSpecs)
+//object HelloWorldTestSpecsRunner extends ConsoleRunner(HelloWorldTestSpecs)
 
 object HelloWorldTestSpecs extends Specification {
 

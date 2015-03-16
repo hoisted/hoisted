@@ -3,7 +3,7 @@ import AssemblyKeys._ // put this at the top of the file
 //Project Information
 name := "Hoisted"
 
-scalaVersion := "2.10.4"
+scalaVersion := "2.11.4"
 
 scalacOptions += "-deprecation"
 
@@ -25,12 +25,12 @@ resolvers += "Scala" at "https://oss.sonatype.org/content/groups/scala-tools/"
 
 // resolvers += "Java.net Maven2 Repository" at "http://download.java.net/maven/2/"
 
-version := "0.2-SNAPSHOT"
+version := "0.3-SNAPSHOT"
 
 // crossScalaVersions in ThisBuild    := Seq("2.9.2", "2.10.0") // "2.9.1-1", "2.9.1", "2.9.0-1", "2.9.0")
 
 libraryDependencies ++= {
-  val liftVersion = "3.0-M1"
+  val liftVersion = "3.0-M4"
   Seq(
     "net.liftweb" %% "lift-webkit" % liftVersion % "compile",
     "net.liftweb" %% "lift-common" % liftVersion % "compile",
@@ -46,7 +46,7 @@ libraryDependencies ++= {
     "ch.qos.logback" % "logback-classic" % "1.0.6" % "compile" ,
     "org.eclipse.jgit" % "org.eclipse.jgit" % "1.3.0.201202151440-r",
     "io.netty" % "netty" % "3.5.10.Final",
-    "org.scala-tools.testing" %% "specs" % "1.6.9" % "test"
+    "org.specs2" %% "specs2" % "2.3.11" % "test"
   )
 }
 
