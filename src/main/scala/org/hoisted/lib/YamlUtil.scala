@@ -32,11 +32,10 @@ object YamlUtil extends LazyLoggableWithImplicitLogger {
    * @param incoming what to parse
    * @return the metadata plus string
    */
-  def parse(incoming: String): Box[MetadataValue] = {
+  def parse(incoming: String): Box[(MetadataValue, Any)] = {
     val yaml = new Yaml(new FilterConstructor)
 
     def objToMetadata(in: Any): MetadataValue = {
-
       (in: @scala.unchecked) match {
         case jm: JMap[_, _] => KeyedMetadataValue(jm.toList.map{ case (key, value) => (MetadataKey(key.toString), objToMetadata(value))})
         case jl: JList[_] => ListMetadataValue(jl.toList.map(objToMetadata _))
@@ -80,6 +79,6 @@ object YamlUtil extends LazyLoggableWithImplicitLogger {
 
     val _incoming = incoming.replace("\t", "    ")
 
-    HoistedUtil.logFailure("YAML Parser for:\n"+incoming)(flatten(objToMetadata(yaml.loadAll(_incoming))))
+    HoistedUtil.logFailure("YAML Parser for:\n"+incoming)(yaml.load(_incoming)).map(md => flatten(objToMetadata(md)) -> md)
   }
 }

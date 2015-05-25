@@ -1,13 +1,14 @@
 package org.hoisted.lib
 
+import java.util
+
 import xml.NodeSeq
 import net.liftweb._
 import common._
-import util.Helpers._
+import net.liftweb.util.Helpers
+import Helpers._
 import org.joda.time._
 import format.ISODateTimeFormat
-import util.Helpers
-import org.hoisted.lib.MetadataValue._
 
 object MetadataValue {
   lazy val hasSquareBraces = """(?:\[|\{)((?:[^,;\]}]+(?:,|;)?)+)(?:\]|\})""".r
@@ -50,6 +51,8 @@ trait MetadataValue {
 
   def findString(key: MetadataKey): Box[String] = map.get(key).flatMap(_.asString)
 
+  def findString(key: String): Box[String] = findString(new StringMetadataKey(key, false))
+
   def findDate(key: MetadataKey): Box[DateTime] = map.get(key).flatMap(_.asDate)
 
   def find(key: MetadataKey): Box[MetadataValue] = map.get(key)
@@ -75,6 +78,8 @@ trait MetadataValue {
   def forceListString: List[String]
 
   def map: MetadataMeta.Metadata = Map.empty
+
+  def toJs(): Any
 
   def testEq(other: MetadataValue): Boolean
 
@@ -108,6 +113,8 @@ case object NullMetadataValue extends MetadataValue {
   def forceString: String = ""
   def forceListString: List[String] = Nil
 
+  def toJs(): Any = null
+
   def prettyString: String = "Null"
 }
 
@@ -123,6 +130,8 @@ final case class StringMetadataValue(s: String) extends MetadataValue  {
     case x => x.forceString == s
   }
   def prettyString = s.encJs
+
+  def toJs(): Any = s
 }
 
 final case class IntMetadataValue(i: Int) extends MetadataValue  {
@@ -137,6 +146,8 @@ final case class IntMetadataValue(i: Int) extends MetadataValue  {
     case x => x.forceString == forceString
   }
   def prettyString = i.toString
+
+  def toJs(): Any = i
 }
 
 final case class DoubleMetadataValue(d: Double) extends MetadataValue  {
@@ -152,6 +163,8 @@ final case class DoubleMetadataValue(d: Double) extends MetadataValue  {
   }
 
   def prettyString = d.toString
+
+  def toJs(): Any = d
 }
 
 object KeyedMetadataValue {
@@ -183,6 +196,14 @@ final case class KeyedMetadataValue(pairs: Seq[(MetadataKey, MetadataValue)]) ex
     case x => x.forceString == forceString
   }
   def prettyString = " { " + pairs.map{case (k, v) => k.key + ": "+ v.prettyString}.mkString(", ") + " } "
+
+  def toJs(): Any = {
+    val ret = new util.HashMap[String, Any]()
+    pairs.foreach {
+      case (k,v) => ret.put(k.key, v.toJs())
+    }
+    ret
+  }
 }
 
 final case class ListMetadataValue(lst: List[MetadataValue]) extends MetadataValue {
@@ -220,6 +241,14 @@ final case class ListMetadataValue(lst: List[MetadataValue]) extends MetadataVal
 
 
   override lazy val map: MetadataMeta.Metadata = lst.foldLeft[MetadataMeta.Metadata](Map.empty)((m, md) => m ++ md.map)
+
+  def toJs(): Any = {
+    val ret = new util.ArrayList[Any]()
+    lst.foreach {
+      case v => ret.add(v)
+    }
+    ret
+  }
 }
 
 final case class BooleanMetadataValue(b: Boolean) extends MetadataValue  {
@@ -235,6 +264,8 @@ final case class BooleanMetadataValue(b: Boolean) extends MetadataValue  {
     case BooleanMetadataValue(ob) => ob == b
     case x => x.forceString == forceString
   }
+
+  def toJs(): Any = b
 }
 
 final case class DateTimeMetadataValue(date: DateTime) extends MetadataValue  {
@@ -250,6 +281,8 @@ final case class DateTimeMetadataValue(date: DateTime) extends MetadataValue  {
     case DateTimeMetadataValue(odt) => odt.getMillis == date.getMillis
     case x => x.forceString == forceString
   }
+
+  def toJs(): Any = date
 }
 
 final case class NodeSeqMetadataValue(ns: NodeSeq) extends MetadataValue  {
@@ -262,5 +295,7 @@ final case class NodeSeqMetadataValue(ns: NodeSeq) extends MetadataValue  {
   def forceListString: List[String] = List(forceString)
   lazy val forceString: String = ns.text
   def testEq(other: MetadataValue): Boolean = forceString == other.forceString
+
+  def toJs(): Any = ns
 }
 

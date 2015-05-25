@@ -701,7 +701,7 @@ class EnvironmentManager() extends LazyLoggableWithImplicitLogger with Factory {
   def syntheticFiles: List[ParsedFile] => Seq[ParsedFile] = fileset => {
     val synt404 = fileset.filter(_.fileInfo.pathAndSuffix.path == List("404")) match {
       case Nil => List(MarkdownFile(FileInfo(Empty, "/404.html", "404", "404.html", Some("html")),
-      <div>So sorry... the page you're looking for isn't found. :-(</div>, NullMetadataValue))
+      <div>So sorry... the page you're looking for isn't found. :-(</div>, NullMetadataValue, null))
       case _ => Nil
     }
 

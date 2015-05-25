@@ -124,7 +124,7 @@ LazyLoggableWithImplicitLogger {
 
     em.templateDir = GlobalCache.templateDir
 
-    Helpers.logTime("Render for " + path) {
+    Helpers.logTime("Time to render: " + path) {
       HoistedEnvironmentManager.doWith(em) {
 
         val _files =
@@ -318,7 +318,18 @@ LazyLoggableWithImplicitLogger {
       response.setHeader(CONTENT_TYPE, "text/css")
 
     } else {
-      response.setHeader(CONTENT_TYPE, mimeTypesMap.getContentType(file.getPath()));
+      val filePath = file.getPath().toLowerCase
+      var theType = mimeTypesMap.getContentType(filePath);
+
+      if (theType == "application/octet-stream") {
+        if (filePath.endsWith(".md") || filePath.endsWith(".html")) {
+          theType = "text/html"
+        } else if (filePath.endsWith(".js")) {
+          theType = "application/x-javascript"
+        }
+      }
+
+      response.setHeader(CONTENT_TYPE, theType);
     }
   }
 

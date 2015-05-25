@@ -102,11 +102,21 @@ class TelegramRunner extends Function0[AnyRef] with LazyLoggableWithImplicitLogg
     }
 
     if (serverMode) {
+      var s: String = null
+
       val server = new HttpStaticFileServer(8080)
       server.run(new File(rootDir), emSetup(_))
-      while (true) {
-        Thread.sleep(1000)
+      new Thread(new Runnable{
+        def run(): Unit = {
+          val sr = new InputStreamReader(System.in)
+          val br = new BufferedReader(sr)
+          s = br.readLine()
+        }
+      }).start()
+      while (null eq s) {
+        Thread.sleep(100)
       }
+      System.exit(0)
     } else {
       val em = emSetup(HoistedEnvironmentManager.value)
       em.addToFinalFuncs(writeMetadata)

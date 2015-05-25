@@ -23,6 +23,7 @@ object Hoist extends LazyLoggableWithImplicitLogger {
     val em = new EnvironmentManager()
 
     HoistedEnvironmentManager.doWith(em) {
+      JSContext.install()
       val info = slurpParams(args.toList)
 
       info.classInfo match {

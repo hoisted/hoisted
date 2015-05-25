@@ -29,6 +29,29 @@ object ParsedFile extends LazyLoggableWithImplicitLogger {
   def findBody(in: NodeSeq): NodeSeq =
     (in \ "content").headOption.map(_.child) getOrElse in
 
+  def computeFileInfo(f: File): FileInfo = {
+    val cp: String = f.getAbsolutePath()
+    val pureName = f.getName
+    val dp = pureName.lastIndexOf(".")
+    val (name, suf) = if (dp <= 0) (pureName, None)
+    else if (pureName.toLowerCase.endsWith(".cms.xml"))
+      (pureName.substring(0, pureName.length - 8), Some("cms.xml"))
+    else (pureName.substring(0, dp),
+      Some(pureName.substring(dp + 1)))
+    FileInfo(Full(f), cp, name, pureName, suf)
+  }
+
+  /**
+   * Parse the file in a JavaScript friendly way
+   * @param file
+   * @return
+   */
+  def load(file: File): ParsedFile = {
+    apply(computeFileInfo(file), Map.empty) match {
+      case Full(x) => x
+      case _ => null
+    }
+  }
 
   def apply(fi: FileInfo, current: Map[String, ParsedFile]): Box[ParsedFile] = {
     current.get(fi.pathAndSuffix.display).filter(pf => {
@@ -42,10 +65,10 @@ object ParsedFile extends LazyLoggableWithImplicitLogger {
           fis <- HoistedUtil.logFailure("Trying to open file "+realFile)(new FileInputStream(realFile))
           yaml <- HoistedUtil.logFailure("Trying to parse "+fi.pathAndSuffix.display)(new String(Helpers.readWholeStream(fis), "UTF-8"))
           _ <- HoistedUtil.logFailure("Trying to close stream for file "+realFile)(fis.close())
-          metaData <- HoistedUtil.reportFailure("Parsing YAML file "+fi.pathAndSuffix.display)( YamlUtil.parse(yaml))
+          (metaData, jsFriendly) <- HoistedUtil.reportFailure("Parsing YAML file "+fi.pathAndSuffix.display)( YamlUtil.parse(yaml))
         } yield {
           metaData.find(ExcludeDirectoryFromRendering).foreach(v => HoistedEnvironmentManager.value.setMetadata(ExcludeDirectoryFromRendering, v))
-          YamlFile(fi, metaData)
+          YamlFile(fi, metaData, jsFriendly)
         }
 
       case Some("xhtml") | Some("cms.xml") if (!HoistedEnvironmentManager.value.excludeFileInfo(fi))  =>
@@ -57,7 +80,7 @@ object ParsedFile extends LazyLoggableWithImplicitLogger {
           metaData = findXmlMetaData(xml)
         } yield {
           metaData.find(ExcludeDirectoryFromRendering).foreach(v => HoistedEnvironmentManager.value.setMetadata(ExcludeDirectoryFromRendering, v))
-          XmlFile(fi, findBody(xml), xml, metaData)
+          XmlFile(fi, findBody(xml), xml, metaData, metaData.toJs())
         }
 
       case Some("html") | Some("htm") if (!HoistedEnvironmentManager.value.excludeFileInfo(fi))  =>
@@ -66,12 +89,12 @@ object ParsedFile extends LazyLoggableWithImplicitLogger {
           fis <- HoistedUtil.logFailure("Trying to open file "+realFile)(new FileInputStream(realFile))
           bytes <- HoistedUtil.logFailure("Reading "+realFile)(Helpers.readWholeStream(fis))
           str = new String(bytes, "UTF-8")
-          (str2, info) = MarkdownParser.readTopMetadata(str, false)
+          (str2, info, rawJson) = MarkdownParser.readTopMetadata(str, false)
            html <- parseHtml5File(str2)
           _ <- HoistedUtil.logFailure("Closing "+realFile)(fis.close())
         } yield {
           info.find(ExcludeDirectoryFromRendering).foreach(v => HoistedEnvironmentManager.value.setMetadata(ExcludeDirectoryFromRendering, v))
-          HtmlFile(fi, html, info)
+          HtmlFile(fi, html, info, rawJson)
         }
 
       case Some("md") | Some("mkd") if (!HoistedEnvironmentManager.value.excludeFileInfo(fi))  =>
@@ -79,11 +102,12 @@ object ParsedFile extends LazyLoggableWithImplicitLogger {
           realFile <- fi.file
           whole <- HoistedUtil.logFailure("Reading "+realFile)(Helpers.readWholeFile(realFile))
           str = new String(whole, "UTF-8")
-          (elems, rawMeta) <- MarkdownParser.parse(str)
+          (elems, rawMeta, js) <- MarkdownParser.parse(str)
 
         } yield {
+          println(s"Loaded ${realFile} and got js ${js}")
           rawMeta.find(ExcludeDirectoryFromRendering).foreach(v => HoistedEnvironmentManager.value.setMetadata(ExcludeDirectoryFromRendering, v))
-          MarkdownFile(fi, elems, rawMeta)
+          MarkdownFile(fi, elems, rawMeta, js)
         }
 
       case Some("doc") | Some("docx") | Some("rtf") | Some("pages") if (!HoistedEnvironmentManager.value.excludeFileInfo(fi))  =>
@@ -109,7 +133,7 @@ object ParsedFile extends LazyLoggableWithImplicitLogger {
                 case xs => map + (k2 -> ListMetadataValue(xs.map(MetadataValue(_))))
               }}.toList)
 
-          HtmlFile(fi, MarkdownParser.childrenOfBody(html) ,md)}) or Full(OtherFile(fi))
+          HtmlFile(fi, MarkdownParser.childrenOfBody(html) ,md, null)}) or Full(OtherFile(fi))
 
       case _ =>
         Full(OtherFile(fi))
@@ -275,6 +299,8 @@ sealed trait ParsedFile {
 
   def updateFileInfo(newFileInfo: FileInfo): MyType
 
+  def meta: Any
+
   def metaData: MetadataValue
 
   def findData(in: MetadataKey): Box[MetadataValue] = metaData.map.get(in)
@@ -375,6 +401,8 @@ final case class SyntheticFile(computeFileInfo: () => FileInfo,
   lazy val fileInfo = computeFileInfo()
   def writeTo(out: OutputStream): Unit = writer(out)
 
+  def meta: Any = null
+
   override lazy val metaData: MetadataValue = computeMetaData()
 
   def updateMetadata(newMd: MetadataValue): SyntheticFile = this
@@ -384,6 +412,7 @@ final case class XmlFile(fileInfo: FileInfo,
                          html: NodeSeq,
                          raw: NodeSeq,
                          metaData: MetadataValue,
+                         meta: Any,
                          uniqueId: String = Helpers.nextFuncName) extends HasHtml {
   type MyType = XmlFile
 
@@ -395,6 +424,7 @@ final case class XmlFile(fileInfo: FileInfo,
 
 final case class YamlFile(fileInfo: FileInfo,
                          metaData: MetadataValue,
+                         meta: Any,
                          uniqueId: String = Helpers.nextFuncName) extends ParsedFile {
   type MyType = YamlFile
 
@@ -416,6 +446,7 @@ final case class YamlFile(fileInfo: FileInfo,
 final case class HtmlFile(fileInfo: FileInfo,
                           html: NodeSeq,
                           metaData: MetadataValue,
+                          meta: Any,
                           uniqueId: String = Helpers.nextFuncName) extends HasHtml {
   type MyType = HtmlFile
 
@@ -428,6 +459,7 @@ final case class HtmlFile(fileInfo: FileInfo,
 final case class MarkdownFile(fileInfo: FileInfo,
                               html: NodeSeq,
                               metaData: MetadataValue,
+                              meta: Any,
                               uniqueId: String = Helpers.nextFuncName) extends HasHtml {
   type MyType = MarkdownFile
 
@@ -466,6 +498,8 @@ final case class OtherFile(fileInfo: FileInfo,
 
     fileInfo.file.foreach(copy(_))
   }
+
+  def meta: Any = null
 }
 
 /**

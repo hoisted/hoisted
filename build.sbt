@@ -1,9 +1,10 @@
-import AssemblyKeys._ // put this at the top of the file
+// import AssemblyKeys._ // put this at the top of the file
+import sbtassembly.AssemblyPlugin.autoImport._
 
 //Project Information
 name := "Hoisted"
 
-scalaVersion := "2.11.4"
+scalaVersion := "2.11.6"
 
 scalacOptions += "-deprecation"
 
@@ -19,7 +20,7 @@ organization := "org.hoisted"
 
 // seq(webSettings :_*)
 
-// resolvers += "Scala Snapshots" at "https://oss.sonatype.org/content/repositories/snapshots/"
+resolvers += "Scala Snapshots" at "https://oss.sonatype.org/content/repositories/snapshots/"
 
 resolvers += "Scala" at "https://oss.sonatype.org/content/groups/scala-tools/"
 
@@ -30,7 +31,7 @@ version := "0.3-SNAPSHOT"
 // crossScalaVersions in ThisBuild    := Seq("2.9.2", "2.10.0") // "2.9.1-1", "2.9.1", "2.9.0-1", "2.9.0")
 
 libraryDependencies ++= {
-  val liftVersion = "3.0-M4"
+  val liftVersion = "3.0-SNAPSHOT"
   Seq(
     "net.liftweb" %% "lift-webkit" % liftVersion % "compile",
     "net.liftweb" %% "lift-common" % liftVersion % "compile",
@@ -58,9 +59,25 @@ publishTo <<= version { (v: String) =>
     Some("releases"  at nexus + "service/local/staging/deploy/maven2")
 }
 
-assemblySettings
+// assemblySettings
 
-jarName in assembly := "hoisted.jar"
+assemblyMergeStrategy in assembly := {
+  case x if x == "META-INF/MANIFEST.MF" => MergeStrategy.discard
+  case x if x.endsWith(".class") => MergeStrategy.first
+  case x => MergeStrategy.concat
+}
+
+//{
+//  case PathList("javax", "servlet", xs @ _*)         => MergeStrategy.first
+//  case PathList(ps @ _*) if ps.last endsWith ".html" => MergeStrategy.first
+//  case "application.conf"                            => MergeStrategy.concat
+//  case "unwanted.txt"                                => MergeStrategy.discard
+//  case x =>
+//    val oldStrategy = (assemblyMergeStrategy in assembly).value
+//    oldStrategy(x)
+//}
+
+assemblyJarName in assembly := "hoisted.jar"
 
 test in assembly := {}
 
