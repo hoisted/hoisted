@@ -4,7 +4,7 @@ import sbtassembly.AssemblyPlugin.autoImport._
 //Project Information
 name := "Hoisted"
 
-scalaVersion := "2.11.6"
+scalaVersion := "2.12.1"
 
 scalacOptions += "-deprecation"
 
@@ -31,7 +31,7 @@ version := "0.3-SNAPSHOT"
 // crossScalaVersions in ThisBuild    := Seq("2.9.2", "2.10.0") // "2.9.1-1", "2.9.1", "2.9.0-1", "2.9.0")
 
 libraryDependencies ++= {
-  val liftVersion = "3.0-SNAPSHOT"
+  val liftVersion = "3.0.1"
   Seq(
     "net.liftweb" %% "lift-webkit" % liftVersion % "compile",
     "net.liftweb" %% "lift-common" % liftVersion % "compile",
@@ -47,7 +47,9 @@ libraryDependencies ++= {
     "ch.qos.logback" % "logback-classic" % "1.0.6" % "compile" ,
     "org.eclipse.jgit" % "org.eclipse.jgit" % "1.3.0.201202151440-r",
     "io.netty" % "netty" % "3.5.10.Final",
-    "org.specs2" %% "specs2" % "2.3.11" % "test"
+    ("org.asciidoctor"     % "asciidoctorj" % "1.5.4.1").
+      exclude("org.jruby", "jruby-complete"),
+    "org.jruby" % "jruby-complete" % "1.7.26" % "provided"
   )
 }
 
