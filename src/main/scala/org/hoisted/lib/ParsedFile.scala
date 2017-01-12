@@ -110,6 +110,19 @@ object ParsedFile extends LazyLoggableWithImplicitLogger {
           MarkdownFile(fi, elems, rawMeta, js)
         }
 
+      case Some("adoc" | "asciidoc" | "ad" | "asc") if (!HoistedEnvironmentManager.value.excludeFileInfo(fi))  =>
+        for {
+          realFile <- fi.file
+          whole <- HoistedUtil.logFailure("Reading "+realFile)(Helpers.readWholeFile(realFile))
+          str = new String(whole, "UTF-8")
+          (elems, rawMeta, js) <- AsciidocParser.parse(str)
+
+        } yield {
+          println(s"Loaded ${realFile} and got js ${js}")
+          rawMeta.find(ExcludeDirectoryFromRendering).foreach(v => HoistedEnvironmentManager.value.setMetadata(ExcludeDirectoryFromRendering, v))
+          AsciidocFile(fi, elems, rawMeta, js)
+        }
+
       case Some("doc") | Some("docx") | Some("rtf") | Some("pages") if (!HoistedEnvironmentManager.value.excludeFileInfo(fi))  =>
         (for {
           realFile <- fi.file
@@ -467,6 +480,19 @@ final case class MarkdownFile(fileInfo: FileInfo,
 
   def updateMetadata(newMd: MetadataValue): MarkdownFile = copy(metaData =  newMd)
   def updateHtml(newHtml: NodeSeq): MarkdownFile = copy(html = newHtml)
+}
+
+final case class AsciidocFile(fileInfo: FileInfo,
+                              html: NodeSeq,
+                              metaData: MetadataValue,
+                              meta: Any,
+                              uniqueId: String = Helpers.nextFuncName) extends HasHtml {
+  type MyType = AsciidocFile
+
+  def updateFileInfo(newFileInfo: FileInfo): AsciidocFile = copy(fileInfo = newFileInfo)
+
+  def updateMetadata(newMd: MetadataValue): AsciidocFile = copy(metaData =  newMd)
+  def updateHtml(newHtml: NodeSeq): AsciidocFile = copy(html = newHtml)
 }
 
 final case class OtherFile(fileInfo: FileInfo,
