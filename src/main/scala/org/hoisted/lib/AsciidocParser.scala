@@ -91,6 +91,7 @@ object AsciidocParser extends Loggable {
   private lazy val asciidoctorAttributes =
     AttributesBuilder.attributes()
       .unsetStyleSheet()
+      .showTitle(true)
   private lazy val asciidoctorOptions =
     OptionsBuilder.options()
       .safe(SafeMode.SAFE)
@@ -107,6 +108,7 @@ object AsciidocParser extends Loggable {
               logger.info(s"Found non-string asciidoc metadata value for $key: $other")
               Seq()
           }
+
         metadata = KeyedMetadataValue.build(stringMetadata)
         htmlString <- Helpers.tryo(asciidoctor.convert(in, asciidoctorOptions))
         res = HoistedHtml5.parse(s"<html><head><title>I eat yaks</title></head><body>$htmlString</body></html>")
