@@ -97,7 +97,22 @@ object MarkdownParser {
             case e: Elem => e
           }.flatMap(_.child)
         }
-      } yield (info, retPairs, rawJson)
+
+        titleFromHtml = res.map(_ \\ "h1").flatMap(_.headOption).map(_.text)
+      } yield {
+        // Use title from HTML if no other title has been specified.
+        val finalMetadata =
+          (retPairs.map.get(MetadataKey("title")), titleFromHtml) match {
+            case (Some(_), _) =>
+              retPairs
+            case (_, Full(title)) =>
+              retPairs +&+ KeyedMetadataValue(MetadataKey("title"), MetadataValue(title))
+            case _ =>
+              retPairs
+          }
+
+        (info, finalMetadata, rawJson)
+      }
     }
 
   }
