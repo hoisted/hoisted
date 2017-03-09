@@ -186,12 +186,18 @@ object BaseSnippets extends LazyLoggableWithImplicitLogger {
         "data-htag=root [class+]" #> (depthClass + rd) & "a *" #> body & "a [href]" #> ("#"+id) andThen  "* [data-htag]" #> (Empty: Box[String]))).apply(ns)
   }
 
+  private[this] def titleFromParsedFile(file: ParsedFile): NodeSeq = {
+    file.findData(MetadataKey("title")).flatMap(_.asNodeSeq) or
+      file.findData(MetadataKey("sub")).flatMap(_.asNodeSeq) openOr
+      Text(file.fileInfo.name)
+  }
+
   def doSubs(in: NodeSeq): NodeSeq = {
     val info = for {
       tpe <- S.attr("type").toList
       max = S.attr("max").flatMap(asInt).filter(_ > 0) openOr 10
       rec <- env.findByTag("sub", Full(tpe)).take(max)
-      title = rec.findData(MetadataKey("sub")).flatMap(_.asNodeSeq) openOr Text("Happening")
+      title = titleFromParsedFile(rec)
       desc = rec.findData(MetadataKey("desc")).flatMap(_.asNodeSeq)
     } yield (rec, title, desc)
 
