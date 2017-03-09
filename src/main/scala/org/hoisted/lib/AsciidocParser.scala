@@ -117,8 +117,23 @@ object AsciidocParser extends Loggable {
             case e: Elem => e
           }.flatMap(_.child)
         }
+
+        titleFromDocument =
+          Box(metadata.map.get(MetadataKey("doctitle")).flatMap(_.asString)) or
+            res.map(_ \\ "h1").flatMap(_.headOption).map(_.text)
       } yield {
-        (documentBody, metadata, documentAttributes)
+        // Use title from HTML if no other title has been specified.
+        val finalMetadata =
+          (metadata.map.get(MetadataKey("title")), titleFromDocument) match {
+            case (Some(_), _) =>
+              metadata
+            case (_, Full(title)) =>
+              metadata +&+ KeyedMetadataValue(MetadataKey("title"), MetadataValue(title))
+            case _ =>
+              metadata
+          }
+
+        (documentBody, finalMetadata, documentAttributes)
       }
     }
   }
