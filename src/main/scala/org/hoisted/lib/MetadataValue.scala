@@ -2,7 +2,7 @@ package org.hoisted.lib
 
 import java.util
 
-import xml.NodeSeq
+import xml.{NodeSeq,Text}
 import net.liftweb._
 import common._
 import net.liftweb.util.Helpers
@@ -120,6 +120,7 @@ case object NullMetadataValue extends MetadataValue {
 
 final case class StringMetadataValue(s: String) extends MetadataValue  {
   def asString: Box[String] = Full(s)
+  override def asNodeSeq: Box[NodeSeq] = Full(Text(s))
   lazy val asBoolean: Box[Boolean] = Helpers.asBoolean(s)
   lazy val asDate: Box[DateTime] = DateUtils.parseDate(s.trim)
   lazy val asInt: Box[Int] = Helpers.asInt(s)

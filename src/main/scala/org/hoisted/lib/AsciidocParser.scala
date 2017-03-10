@@ -91,6 +91,7 @@ object AsciidocParser extends Loggable {
   private lazy val asciidoctorAttributes =
     AttributesBuilder.attributes()
       .unsetStyleSheet()
+      .showTitle(true)
   private lazy val asciidoctorOptions =
     OptionsBuilder.options()
       .safe(SafeMode.SAFE)
@@ -107,6 +108,7 @@ object AsciidocParser extends Loggable {
               logger.info(s"Found non-string asciidoc metadata value for $key: $other")
               Seq()
           }
+
         metadata = KeyedMetadataValue.build(stringMetadata)
         htmlString <- Helpers.tryo(asciidoctor.convert(in, asciidoctorOptions))
         res = HoistedHtml5.parse(s"<html><head><title>I eat yaks</title></head><body>$htmlString</body></html>")
@@ -115,8 +117,23 @@ object AsciidocParser extends Loggable {
             case e: Elem => e
           }.flatMap(_.child)
         }
+
+        titleFromDocument =
+          Box(metadata.map.get(MetadataKey("doctitle")).flatMap(_.asString)) or
+            res.map(_ \\ "h1").flatMap(_.headOption).map(_.text)
       } yield {
-        (documentBody, metadata, documentAttributes)
+        // Use title from HTML if no other title has been specified.
+        val finalMetadata =
+          (metadata.map.get(MetadataKey("title")), titleFromDocument) match {
+            case (Some(_), _) =>
+              metadata
+            case (_, Full(title)) =>
+              metadata +&+ KeyedMetadataValue(MetadataKey("title"), MetadataValue(title))
+            case _ =>
+              metadata
+          }
+
+        (documentBody, finalMetadata, documentAttributes)
       }
     }
   }
