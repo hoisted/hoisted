@@ -164,7 +164,7 @@ trait HoistedRenderer extends LazyLoggableWithImplicitLogger with PluginRunner w
                 }).map(_.getMillis).filter(_ > start).sorted.headOption
 
 
-                HoistedTransformMetaData(new String(log.toByteArray), aliases, when getOrElse 0L)
+                HoistedTransformMetaData(new String(log.toByteArray), aliases, List(), List(), when getOrElse 0L)
               }
 
               environment.finalFuncs.foldLeft(r22)((res, f) => f(res))
@@ -282,7 +282,15 @@ trait FileListDiffer {
 
 }
 
-final case class HoistedTransformMetaData(logs: String, aliases: List[Alias], nextRenderDate: Long)
+final case class URLRedirect(from: String, to: String, appendFrom: Boolean, leadingMatch: Boolean, trimLead: Boolean, code: Option[Int] )
+
+final case class URLProxy(from: String, to: String, leadingMatch: Boolean, trimLead: Boolean)
+
+final case class HoistedTransformMetaData(logs: String,
+                                          aliases: List[Alias],
+                                          proxies: List[URLProxy],
+                                          redirects: List[URLRedirect],
+                                          nextRenderDate: Long)
 
 case class LoadFiles(current: Map[String, ParsedFile]) extends Function1[File, Box[List[ParsedFile]]] with LazyLoggableWithImplicitLogger {
   def apply(dir: File): Box[List[ParsedFile]] =

@@ -6,7 +6,8 @@ import common._
 import tools.nsc.reporters.Reporter
 import collection.mutable.ListBuffer
 import java.util.concurrent.ConcurrentHashMap
-import tools.nsc.util.{BatchSourceFile, Position}
+import scala.reflect.internal.util.BatchSourceFile
+import scala.reflect.internal.util.Position
 import tools.nsc.io.VirtualFile
 import util.Helpers
 import java.net.URLClassLoader

@@ -22,6 +22,7 @@ object Hoist extends LazyLoggableWithImplicitLogger {
 
     val em = new EnvironmentManager()
 
+    val s: Box[HoistedTransformMetaData] =
     HoistedEnvironmentManager.doWith(em) {
       JSContext.install()
       val info = slurpParams(args.toList)
@@ -48,6 +49,12 @@ object Hoist extends LazyLoggableWithImplicitLogger {
 
         case _ => logger.error("Usage 'java -jar hoisted.jar source_directory destination_directory"); sys.exit(127)
       }
+    }
+
+
+    s match {
+      case Full(_) => System.exit(0)
+      case _ => System.exit(1)
     }
   }
 

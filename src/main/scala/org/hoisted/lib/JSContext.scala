@@ -23,7 +23,8 @@ import net.liftweb.common._
 object JSContext {
 
   def runSourceContext(session: LiftSession, value: Any, xform: Any => NodeSeq => NodeSeq, ns: NodeSeq): NodeSeq = {
-    import scala.collection.JavaConversions._
+    import scala.collection.JavaConverters._
+
     value match {
       case null => NodeSeq.Empty
       case None => NodeSeq.Empty
@@ -43,9 +44,9 @@ object JSContext {
         runSourceContext(session, ar.toList, xform, ns)
       case n: java.lang.Iterable[_] => runSourceContext(session, n.iterator(), xform, ns)
       case n: java.util.Iterator[_] =>
-        for {i <- n.toSeq; nodes <- session.currentSourceContext.doWith(i)(session.processSurroundAndInclude("Source", xform(i)(ns)))} yield nodes
+        for {i <- n.asScala.toSeq; nodes <- session.currentSourceContext.doWith(i)(session.processSurroundAndInclude("Source", xform(i)(ns)))} yield nodes
       case en: java.util.Enumeration[_] =>
-        for {i <- en.toSeq; nodes <- session.currentSourceContext.doWith(i)(session.processSurroundAndInclude("Source", xform(i)(ns)))} yield nodes
+        for {i <- en.asScala.toSeq; nodes <- session.currentSourceContext.doWith(i)(session.processSurroundAndInclude("Source", xform(i)(ns)))} yield nodes
       case se: scala.collection.Iterable[_] => runSourceContext(session, se.iterator, xform, ns)
       case se: scala.collection.Iterator[_] =>
         for {i <- se.toSeq; nodes <- session.currentSourceContext.doWith(i)(session.processSurroundAndInclude("Source", xform(i)(ns)))} yield nodes
