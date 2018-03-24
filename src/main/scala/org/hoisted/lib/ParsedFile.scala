@@ -7,6 +7,7 @@ import util._
 import Helpers._
 import scala.xml._
 import java.io._
+import java.nio.file.{Files,StandardCopyOption}
 import org.joda.time.{ DateTime}
 import collection.mutable.ListBuffer
 import org.apache.tika.parser.AutoDetectParser
@@ -349,6 +350,20 @@ sealed trait ParsedFile {
   def uniqueId: String
 
   def writeTo(out: OutputStream): Unit
+
+  def copyTo(out: File): Unit = {
+    val sourcePath =
+      fileInfo.file
+        .openOrThrowException(s"Copying file but no source file was found: ${fileInfo}")
+        .toPath
+
+    Files.copy(
+      sourcePath,
+      out.toPath,
+      StandardCopyOption.REPLACE_EXISTING,
+      StandardCopyOption.COPY_ATTRIBUTES
+    )
+  }
 
   lazy val bytes:Box[Array[Byte]] = {
     Helpers.tryo{
