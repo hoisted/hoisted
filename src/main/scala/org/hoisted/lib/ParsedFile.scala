@@ -68,7 +68,23 @@ object ParsedFile extends LazyLoggableWithImplicitLogger {
           _ <- HoistedUtil.logFailure("Trying to close stream for file "+realFile)(fis.close())
           (metaData, jsFriendly) <- HoistedUtil.reportFailure("Parsing YAML file "+fi.pathAndSuffix.display)( YamlUtil.parse(yaml))
         } yield {
-          metaData.find(ExcludeDirectoryFromRendering).foreach(v => HoistedEnvironmentManager.value.setMetadata(ExcludeDirectoryFromRendering, v))
+          metaData.find(ExcludeDirectoryFromRendering).foreach {
+            case StringMetadataValue(directory) =>
+              val adjusted = fi.adjustRelativePath(directory)
+
+              // For backwards compatibility, set *both* adjusted *and* base
+              // directory as excluded from rendering.
+              HoistedEnvironmentManager.value.setMetadata(
+                ExcludeDirectoryFromRendering,
+                StringMetadataValue(adjusted) +&+ StringMetadataValue(directory)
+              )
+            case other =>
+              // For now, don't adjust lists.
+              HoistedEnvironmentManager.value.setMetadata(
+                ExcludeDirectoryFromRendering,
+                other
+              )
+          }
           YamlFile(fi, metaData, jsFriendly)
         }
 
@@ -553,6 +569,18 @@ case class Alias(from: String, to: String)
 final case class FileInfo(file: Box[File], relPath: String, name: String, pureName: String, suffix: Option[String]) {
   lazy val pathAndSuffix: PathAndSuffix =
     PathAndSuffix(relPath.toLowerCase.roboSplit("/").dropRight(1) ::: List(name.toLowerCase), suffix.map(_.toLowerCase))
+
+  // Take a path relative to this file and adjust it to be relative to the root.
+  def adjustRelativePath(path: String) = {
+    val pathLeadingSlash = "/" == path.substring(0,1)
+    val prefix =
+      pathAndSuffix
+        .path
+        .dropRight(1) // drop the filename
+        .mkString("/", "/", if (pathLeadingSlash) "" else "/")
+
+    prefix + path
+  }
 }
 
 object PathAndSuffix {
