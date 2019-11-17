@@ -47,8 +47,8 @@ libraryDependencies ++= {
     "ch.qos.logback" % "logback-classic" % "1.0.6" % "compile" ,
     "org.eclipse.jgit" % "org.eclipse.jgit" % "1.3.0.201202151440-r",
     "io.netty" % "netty" % "3.5.10.Final",
-    ("org.asciidoctor"     % "asciidoctorj" % "1.5.4.1").
-      exclude("org.jruby", "jruby-complete"),
+    ("org.asciidoctor"     % "asciidoctorj" % "2.1.0") /*.
+      exclude("org.jruby", "jruby-complete")*/,
     "org.jruby" % "jruby-complete" % "1.7.26" % "provided"
   )
 }
