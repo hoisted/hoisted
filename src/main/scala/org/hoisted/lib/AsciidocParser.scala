@@ -5,9 +5,9 @@ import scala.xml.{Elem, NodeSeq}
 
 import net.liftweb._
   import common._
+  import java.io.{File, FileOutputStream, FileInputStream}
   import util.{Helpers}
-
-import org.asciidoctor._
+import scala.sys.process._
 
 /**
  * Created with IntelliJ IDEA.
@@ -87,40 +87,54 @@ object AsciidocParser extends Loggable {
     }
   }
 
-  private lazy val asciidoctor = Asciidoctor.Factory.create()
-  private lazy val asciidoctorAttributes =
-    AttributesBuilder.attributes()
-      .unsetStyleSheet()
-      .showTitle(true)
-  private lazy val asciidoctorOptions =
-    OptionsBuilder.options()
-      .safe(SafeMode.SAFE)
-      .attributes(asciidoctorAttributes)
+  private def writeToTmpFile(in: String): Box[String] = {
+    Helpers.tryo{
+    val file = File.createTempFile("hoisted_", ".adoc")
+    val fos = new FileOutputStream(file)
+    fos.write(in.getBytes("UTF-8"))
+    fos.flush()
+    fos.close()
+    file.getAbsolutePath()
+
+    }
+  }
+
+  private def execAsciiDoctor(filename: String): Box[Any] = {
+    Helpers.tryo {
+     Seq("asciidoctor", "-r", "asciidoctor-diagram", "-d", "book", filename).!
+    }
+  }
+
+  private def readGeneratedHtml(baseFilename: String): Box[String] = {
+    Helpers.tryo{
+    val htmlFile = new File(baseFilename.replace(".adoc", ".html"))
+    val oldFile = new File(baseFilename)
+    val bytes = Helpers.readWholeFile(htmlFile)
+    oldFile.delete()
+    htmlFile.delete()
+    new String(bytes, "UTF-8")
+    }
+  }
 
   def parse(in: String): Box[(NodeSeq, MetadataValue, Any)] = {
-    asciidoctor.synchronized {
-      for {
-        documentAttributes <- Helpers.tryo(asciidoctor.readDocumentHeader(in).getAttributes)
-        stringMetadata =
-          documentAttributes.asScala.toList.flatMap {
-            case (key, value: String) => Seq((key, value))
-            case (key, other) =>
-              logger.info(s"Found non-string asciidoc metadata value for $key: $other")
-              Seq()
-          }
+  //    val metadata = Map[String, String]()
 
-        metadata = KeyedMetadataValue.build(stringMetadata)
-        htmlString <- Helpers.tryo(asciidoctor.convert(in, asciidoctorOptions))
-        res = HoistedHtml5.parse(s"<html><head><title>I eat yaks</title></head><body>$htmlString</body></html>")
+    val (realBody, metadata, _) = readTopMetadata(in, true)
+    AsciidocParser.synchronized {
+      for {
+        filename <- writeToTmpFile(realBody)
+        _ <- execAsciiDoctor(filename)
+        htmlString <- readGeneratedHtml(filename)
+        res = HoistedHtml5.parse(htmlString)
         documentBody <- res.map {
           res => (res \ "body").collect {
             case e: Elem => e
           }.flatMap(_.child)
         }
 
-        titleFromDocument =
-          Box(metadata.map.get(MetadataKey("doctitle")).flatMap(_.asString)) or
-            res.map(_ \\ "h1").flatMap(_.headOption).map(_.text)
+        titleFromDocument =     
+          Box(metadata.map.get(MetadataKey("doctitle")).flatMap(_.asString)) or 
+            res.map(_ \\ "h1").flatMap(_.headOption).map(_.text) 
       } yield {
         // Use title from HTML if no other title has been specified.
         val finalMetadata =
@@ -133,7 +147,7 @@ object AsciidocParser extends Loggable {
               metadata
           }
 
-        (documentBody, finalMetadata, documentAttributes)
+        (documentBody, finalMetadata, None)
       }
     }
   }

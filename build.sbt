@@ -4,7 +4,7 @@ import sbtassembly.AssemblyPlugin.autoImport._
 //Project Information
 name := "Hoisted"
 
-scalaVersion := "2.12.1"
+scalaVersion := "2.12.10"
 
 scalacOptions += "-deprecation"
 
@@ -26,7 +26,7 @@ resolvers += "Scala" at "https://oss.sonatype.org/content/groups/scala-tools/"
 
 // resolvers += "Java.net Maven2 Repository" at "http://download.java.net/maven/2/"
 
-version := "0.4.1-SNAPSHOT"
+version := "0.4.3-SNAPSHOT"
 
 // crossScalaVersions in ThisBuild    := Seq("2.9.2", "2.10.0") // "2.9.1-1", "2.9.1", "2.9.0-1", "2.9.0")
 
@@ -46,10 +46,10 @@ libraryDependencies ++= {
     "junit" % "junit" % "4.7" % "test",
     "ch.qos.logback" % "logback-classic" % "1.0.6" % "compile" ,
     "org.eclipse.jgit" % "org.eclipse.jgit" % "1.3.0.201202151440-r",
-    "io.netty" % "netty" % "3.5.10.Final",
-    ("org.asciidoctor"     % "asciidoctorj" % "2.1.0") /*.
-      exclude("org.jruby", "jruby-complete")*/,
-    "org.jruby" % "jruby-complete" % "1.7.26" % "provided"
+    "io.netty" % "netty" % "3.5.10.Final" /*,
+    ("org.asciidoctor"     % "asciidoctorj" % "1.6.2").
+      exclude("org.jruby", "jruby-complete"),
+    "org.jruby" % "jruby-complete" % "9.2.6.0" % "provided" */
   )
 }
 
