@@ -191,12 +191,17 @@ trait HoistedRenderer extends LazyLoggableWithImplicitLogger with PluginRunner w
         if (env.shouldWriteFile(pf)) {
           val where: File = calcFile(pf)
           where.getParentFile.mkdirs()
-          val out = new FileOutputStream(where)
-          try {
-            pf.writeTo(out)
-          } finally {
-            HoistedUtil.logFailure("Trying to flush " + pf.pathAndSuffix)(out.flush())
-            HoistedUtil.logFailure("Trying to close " + pf.pathAndSuffix)(out.close())
+
+          if (env.shouldCopyFile(pf)) {
+            pf.copyTo(where)
+          } else {
+            val out = new FileOutputStream(where)
+            try {
+              pf.writeTo(out)
+            } finally {
+              HoistedUtil.logFailure("Trying to flush " + pf.pathAndSuffix)(out.flush())
+              HoistedUtil.logFailure("Trying to close " + pf.pathAndSuffix)(out.close())
+            }
           }
           // where.setLastModified(env.computeDate(pf).getMillis)
         }

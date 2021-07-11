@@ -341,6 +341,15 @@ class EnvironmentManager() extends LazyLoggableWithImplicitLogger with Factory {
   def computeDate: ParsedFile => DateTime = pf => pf.findData(DateKey).flatMap(_.asDate) or
     (pf.fileInfo.file.map(ff => new DateTime(ff.lastModified()))) openOr new DateTime()
 
+  /**
+   * Given a ParsedFile, return true if the file should be copied in as low-
+   * level a way as possible, vs being written via an input/output stream pair.
+   *
+   * By default, if a file is excluded from rendering (see [[excludeFile]]), it
+   * is copied.
+   */
+  def shouldCopyFile: ParsedFile => Boolean = excludeFile
+
   def shouldWriteFile: ParsedFile => Boolean =
     pf => !pf.neverWrite && {
       pf.findData(ServeKey).flatMap(_.asBoolean) openOr (pf.pathAndSuffix.path match {
